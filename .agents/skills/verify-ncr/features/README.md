@@ -27,4 +27,5 @@ This directory is the maintained verification source for the hardware's user-vis
 | ncr | [ncr.md](ncr.md) | C(n, r) end to end through ncr_core |
 | control-model | [control-model.md](control-model.md) | TLA+ model of the FSM: exactness, no quotient overflow, termination |
 | cpu | [cpu.md](cpu.md) | a program with the ncr instruction runs on the single-cycle CPU |
+| board | [board.md](board.md) | the Nexys A7 calculator (both tops) from switches and buttons to UART text |
 | synth | [synth.md](synth.md) | the design synthesizes and its resource count |
