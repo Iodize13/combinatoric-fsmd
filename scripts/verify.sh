@@ -6,9 +6,10 @@
 #   scripts/verify.sh formal [muldiv|ncr|equiv|cpu] [task]
 #   scripts/verify.sh tla
 #   scripts/verify.sh synth
-#   scripts/verify.sh board-synth    # Nexys A7 top mapped to Artix-7 cells (synth_xilinx)
-#   scripts/verify.sh bitstream      # Nexys A7 .bit via openXC7; run inside its nix shell
-#   scripts/verify.sh program [BIT]  # load the .bit over USB-JTAG (openFPGALoader)
+#   scripts/verify.sh board-synth    # both Nexys A7 tops mapped to Artix-7 cells (synth_xilinx)
+#   scripts/verify.sh bitstream [TOP]  # Nexys A7 .bit via openXC7, inside its nix shell;
+#                                      # TOP = nexys_a7_top (default) or nexys_a7_cpu_top
+#   scripts/verify.sh program [TOP|BIT]  # load the newest .bit of TOP over USB-JTAG
 #   scripts/verify.sh schematic        # RTL schematics as SVG (needs netlistsvg)
 #   scripts/verify.sh all
 #   scripts/verify.sh clean [RUN_ID]
@@ -33,7 +34,9 @@ export PATH="$OCS/bin:$PATH"
 RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_engine.vhd rtl/ncr_core.vhd rtl/cpu_pkg.vhd rtl/program_pkg.vhd rtl/cpu_alu.vhd rtl/regfile.vhd rtl/imem.vhd rtl/dmem.vhd rtl/mem_map.vhd rtl/wb_mux.vhd rtl/md_mux.vhd rtl/cpu_decode.vhd rtl/cpu_ctrl.vhd rtl/cpu_dp.vhd rtl/cpu.vhd)
 RTL_ABS=("${RTL[@]/#/$ROOT/}")
 # Nexys A7 calculator around ncr_core (pins in board/nexys_a7.xdc).
-BOARD=(board/uart_tx.vhd board/bin2bcd.vhd board/btn_pulse.vhd board/run_request.vhd board/ncr_report.vhd board/nexys_a7_top.vhd)
+BOARD=(board/uart_tx.vhd board/bin2bcd.vhd board/btn_pulse.vhd board/run_request.vhd board/ncr_report.vhd board/nexys_a7_top.vhd board/cpu_io.vhd board/nexys_a7_cpu_top.vhd)
+# ROM programs: source:constant, assembled into rtl/program_pkg.vhd by scripts/asm.py.
+PROGRAMS=(tb/cpu_test.s:TEST_PROGRAM board/calc.s:CALC_PROGRAM)
 BOARD_ABS=("${BOARD[@]/#/$ROOT/}")
 
 prep_dirs() { mkdir -p "$EV" "$WK"; }
@@ -74,12 +77,19 @@ cmd_sim() {
   record sim-analyze ghdl -a --std=08 --workdir="$WK" \
     "${RTL_ABS[@]}" "$ROOT/formal/ref/muldiv_ref.vhd" "$ROOT/formal/ref/ncr_core_ref.vhd" \
     "${BOARD_ABS[@]}" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd" "$ROOT/tb/tb_cpu.vhd" "$ROOT/tb/tb_board.vhd"
-  for tb in tb_muldiv tb_ncr tb_equiv tb_cpu tb_board; do
-    record "sim-elab-$tb" ghdl -e --std=08 --workdir="$WK" "$tb" || { rc=1; continue; }
-    local gen=(); [ "$tb" = tb_ncr ] && gen=(-gN_MAX="$nmax")
-    record "sim-run-$tb" ghdl -r --std=08 --workdir="$WK" "$tb" "${gen[@]}" \
-      --assert-level=error --wave="$EV/$tb.ghw" || rc=1
-    grep -h 'TB PASS' "$EV/sim-run-$tb.log" || { echo "$tb: no 'TB PASS' line"; rc=1; }
+  (cd "$ROOT" && python3 scripts/asm.py --check "${PROGRAMS[@]}") || return 1
+  # run name -> testbench entity + generics (tb_board_cpu is tb_board on the CPU top)
+  local run tb
+  for run in tb_muldiv tb_ncr tb_equiv tb_cpu tb_board tb_board_cpu; do
+    tb=$run; local gen=()
+    case $run in
+      tb_ncr) gen=(-gN_MAX="$nmax") ;;
+      tb_board_cpu) tb=tb_board; gen=(-gUSE_CPU=true) ;;
+    esac
+    record "sim-elab-$run" ghdl -e --std=08 --workdir="$WK" "$tb" || { rc=1; continue; }
+    record "sim-run-$run" ghdl -r --std=08 --workdir="$WK" "$tb" "${gen[@]}" \
+      --assert-level=error --wave="$EV/$run.ghw" || rc=1
+    grep -h 'TB PASS' "$EV/sim-run-$run.log" || { echo "$run: no 'TB PASS' line"; rc=1; }
   done
   return $rc
 }
@@ -138,14 +148,18 @@ cmd_synth() {
 cmd_board_synth() {
   prep_dirs
   cd "$WK"
-  record board-synth yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e nexys_a7_top; synth_xilinx -top nexys_a7_top -flatten; stat"
+  local rc=0 top
+  for top in nexys_a7_top nexys_a7_cpu_top; do
+    record "board-synth-$top" yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e $top; synth_xilinx -top $top -flatten; stat" || rc=1
+  done
+  return $rc
 }
 
 # openXC7 flow (github.com/openXC7/demo-projects openXC7.mk): synth_xilinx -> nextpnr-xilinx
 # -> fpga-as. nextpnr-xilinx, bbasm and fpga-as come from the openXC7 nix dev shell, which
 # also sets NEXTPNR_XILINX_DIR and PRJXRAY_DB_DIR.
 cmd_bitstream() {
-  local t
+  local t top=${1:-nexys_a7_top}
   for t in nextpnr-xilinx fpga-as; do
     command -v "$t" >/dev/null || {
       echo "MISS $t: run inside: nix --extra-experimental-features 'nix-command flakes' develop github:openxc7/toolchain-nix"
@@ -166,18 +180,19 @@ cmd_bitstream() {
       '$NEXTPNR_XILINX_DIR/bin/bbasm' -l '$WK/$dbpart.bba' '$CHIPDB_DIR/$dbpart.bin' &&
       rm -f '$WK/$dbpart.bba'" || return 1
   fi
-  record board-yosys yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e nexys_a7_top; synth_xilinx -flatten -abc9 -arch xc7 -top nexys_a7_top; write_json $WK/nexys_a7.json" || return 1
-  record board-pnr nextpnr-xilinx --chipdb "$CHIPDB_DIR/$dbpart.bin" --xdc "$ROOT/board/nexys_a7.xdc" \
-    --json "$WK/nexys_a7.json" --fasm "$WK/nexys_a7.fasm" || return 1
-  record board-bit sh -c "fpga-as --prjxray_db_path='$PRJXRAY_DB_DIR/artix7' --part $NEXYS_PART '$WK/nexys_a7.fasm' > '$out/nexys_a7.bit'" || return 1
-  grep -iE 'Max frequency|Critical path|ERROR' "$EV/board-pnr.log" | tail -5 || true
-  ls -l "$out/nexys_a7.bit"
+  record "board-yosys-$top" yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e $top; synth_xilinx -flatten -abc9 -arch xc7 -top $top; write_json $WK/$top.json" || return 1
+  record "board-pnr-$top" nextpnr-xilinx --chipdb "$CHIPDB_DIR/$dbpart.bin" --xdc "$ROOT/board/nexys_a7.xdc" \
+    --json "$WK/$top.json" --fasm "$WK/$top.fasm" || return 1
+  record "board-bit-$top" sh -c "fpga-as --prjxray_db_path='$PRJXRAY_DB_DIR/artix7' --part $NEXYS_PART '$WK/$top.fasm' > '$out/$top.bit'" || return 1
+  grep -iE 'Max frequency|Critical path|ERROR' "$EV/board-pnr-$top.log" | tail -5 || true
+  ls -l "$out/$top.bit"
 }
 
 cmd_program() {
-  local bit=${1:-} board=nexys_a7_100
-  [ -n "$bit" ] || bit=$(ls -t "$ROOT"/evidence/*/board/nexys_a7.bit 2>/dev/null | head -1)
-  [ -f "$bit" ] || { echo "no bitstream; run: scripts/verify.sh bitstream"; return 1; }
+  local arg=${1:-nexys_a7_top} bit board=nexys_a7_100
+  if [ -f "$arg" ]; then bit=$arg
+  else bit=$(ls -t "$ROOT"/evidence/*/board/"$arg".bit 2>/dev/null | head -1 || true); fi
+  [ -n "$bit" ] && [ -f "$bit" ] || { echo "no bitstream for $arg; run: scripts/verify.sh bitstream $arg"; return 1; }
   case "$NEXYS_PART" in xc7a50t*) board=nexys_a7_50 ;; esac
   echo "loading $bit ($board, SRAM only: lost on power off)"
   openFPGALoader -b "$board" --bitstream "$bit"
@@ -231,5 +246,5 @@ case "${1:-}" in
   schematic) shift; cmd_schematic "$@" ;;
   all)    shift; cmd_all "$@" ;;
   clean)  shift; cmd_clean "$@" ;;
-  *) sed -n '2,15p' "$0"; exit 2 ;;
+  *) sed -n '2,17p' "$0"; exit 2 ;;
 esac
