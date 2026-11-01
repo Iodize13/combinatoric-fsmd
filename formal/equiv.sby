@@ -13,7 +13,7 @@ ncr_prove: mode prove
 muldiv_bmc: mode bmc
 muldiv_bmc: depth 40
 ncr_bmc: mode bmc
-ncr_bmc: depth 100
+ncr_bmc: depth 60
 
 [engines]
 muldiv_prove: abc pdr

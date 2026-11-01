@@ -6,6 +6,7 @@
 #   scripts/verify.sh formal [muldiv|ncr|equiv] [task]
 #   scripts/verify.sh tla
 #   scripts/verify.sh synth
+#   scripts/verify.sh schematic        # RTL schematics as SVG (needs netlistsvg)
 #   scripts/verify.sh all
 #   scripts/verify.sh clean [RUN_ID]
 # Evidence:   evidence/<RUN_ID>/   (kept by clean)
@@ -15,6 +16,7 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 OCS=${OSS_CAD_SUITE:-$HOME/.local/opt/oss-cad-suite}
 TLA_JAR=${TLA2TOOLS:-$HOME/.local/opt/tla/tla2tools.jar}
+NETLISTSVG=${NETLISTSVG:-$HOME/.local/opt/netlistsvg/node_modules/.bin/netlistsvg}
 RUN_ID=${RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}
 EV="$ROOT/evidence/$RUN_ID"
 WK="$ROOT/build/$RUN_ID"
@@ -119,6 +121,21 @@ cmd_synth() {
   record synth yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} -e ncr_core; synth -top ncr_core; stat"
 }
 
+# One SVG per entity, hierarchy kept: structural tops show their sub-units as boxes.
+cmd_schematic() {
+  prep_dirs
+  mkdir -p "$EV/schematic"
+  cd "$WK"
+  local rc=0 m
+  for m in alu muldiv_dp muldiv_ctrl muldiv ncr_dp ncr_ctrl ncr_core; do
+    record "schematic-$m" yosys -m ghdl -p \
+      "ghdl --std=08 ${RTL_ABS[*]} -e $m; prep -top $m; opt_clean -purge; write_json $WK/$m.json" || { rc=1; continue; }
+    "$NETLISTSVG" "$WK/$m.json" -o "$EV/schematic/$m.svg" || rc=1
+  done
+  ls "$EV/schematic"
+  return $rc
+}
+
 cmd_all() {
   local rc=0
   cmd_doctor > /dev/null || { echo "doctor failed; run: scripts/verify.sh doctor"; return 1; }
@@ -145,6 +162,7 @@ case "${1:-}" in
   formal) shift; cmd_formal "$@" ;;
   tla)    shift; cmd_tla "$@" ;;
   synth)  shift; cmd_synth "$@" ;;
+  schematic) shift; cmd_schematic "$@" ;;
   all)    shift; cmd_all "$@" ;;
   clean)  shift; cmd_clean "$@" ;;
   *) sed -n '2,12p' "$0"; exit 2 ;;
