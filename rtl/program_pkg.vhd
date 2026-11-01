@@ -7,7 +7,7 @@ use work.cpu_pkg.all;
 
 package program_pkg is
   -- tb/cpu_test.s
-  constant PROGRAM : mem_t := (
+  constant TEST_PROGRAM : mem_t := (
       0 => x"20080005",  -- addi $t0, $zero, 5
       1 => x"20090002",  -- addi $t1, $zero, 2
       2 => x"7109501C",  -- ncr  $t2, $t0, $t1
@@ -65,11 +65,16 @@ package program_pkg is
      54 => x"08000032",  -- j    loop
      55 => x"AC0A0040",  -- sw   $t2, 64($zero)
      56 => x"20040015",  -- addi $a0, $zero, 21
-     57 => x"0C00003C",  -- jal  double
+     57 => x"0C000041",  -- jal  double
      58 => x"AC020048",  -- sw   $v0, 72($zero)
-     59 => x"0800003B",  -- j    halt
-     60 => x"00841020",  -- add $v0, $a0, $a0
-     61 => x"03E00008",  -- jr   $ra
+     59 => x"AC0A0400",  -- sw   $t2, 1024($zero)
+     60 => x"8C110000",  -- lw   $s1, 0($zero)
+     61 => x"AC11004C",  -- sw   $s1, 76($zero)
+     62 => x"8C110404",  -- lw   $s1, 1028($zero)
+     63 => x"AC110050",  -- sw   $s1, 80($zero)
+     64 => x"08000040",  -- j    halt
+     65 => x"00841020",  -- add $v0, $a0, $a0
+     66 => x"03E00008",  -- jr   $ra
     others => (others => '0')
   );
 end package;

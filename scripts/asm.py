@@ -48,12 +48,28 @@ def chars(text):
     return text.encode().decode("unicode_escape")
 
 
+def strip_comment(raw):
+    """Drop a '#' comment; inside putc/puts operands a quoted '#' is a character."""
+    if not re.match(r"\s*(\w+:\s*)?put[cs]\b", raw):
+        return raw.split("#", 1)[0].strip()
+    quote = None
+    for i, c in enumerate(raw):
+        if quote:
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c == "#":
+            return raw[:i].strip()
+    return raw.strip()
+
+
 def expand(src):
     """Source lines -> [(label list, text, source line)] with pseudo-instructions expanded."""
     out = []
     labels = []
     for lineno, raw in enumerate(src.splitlines(), 1):
-        code = re.sub(r"#(?=(?:[^\"']|\"[^\"]*\"|'[^']*')*$).*", "", raw).strip()
+        code = strip_comment(raw)
         m = re.match(r"(\w+):\s*(.*)", code)
         if m:
             labels.append(m.group(1))

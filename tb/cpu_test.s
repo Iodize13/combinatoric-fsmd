@@ -65,6 +65,13 @@ done: sw   $t2, 64($zero)
       addi $a0, $zero, 21
       jal  double
       sw   $v0, 72($zero)
+# I/O: a store to 0x400 does not reach RAM word 0 (which it would alias), and a load from
+# I/O returns the board's io_rdata (tb_cpu answers mem_addr xor 0xCAFE0000)
+      sw   $t2, 1024($zero)
+      lw   $s1, 0($zero)
+      sw   $s1, 76($zero)
+      lw   $s1, 1028($zero)
+      sw   $s1, 80($zero)
 halt: j    halt
 double: add $v0, $a0, $a0
       jr   $ra

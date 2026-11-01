@@ -30,7 +30,7 @@ WK="$ROOT/build/$RUN_ID"
 export PATH="$OCS/bin:$PATH"
 
 # RTL sources in compile order (packages first). The .sby files keep their own copies.
-RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_engine.vhd rtl/ncr_core.vhd rtl/cpu_pkg.vhd rtl/program_pkg.vhd rtl/cpu_alu.vhd rtl/regfile.vhd rtl/imem.vhd rtl/dmem.vhd rtl/wb_mux.vhd rtl/md_mux.vhd rtl/cpu_decode.vhd rtl/cpu_ctrl.vhd rtl/cpu_dp.vhd rtl/cpu.vhd)
+RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_engine.vhd rtl/ncr_core.vhd rtl/cpu_pkg.vhd rtl/program_pkg.vhd rtl/cpu_alu.vhd rtl/regfile.vhd rtl/imem.vhd rtl/dmem.vhd rtl/mem_map.vhd rtl/wb_mux.vhd rtl/md_mux.vhd rtl/cpu_decode.vhd rtl/cpu_ctrl.vhd rtl/cpu_dp.vhd rtl/cpu.vhd)
 RTL_ABS=("${RTL[@]/#/$ROOT/}")
 # Nexys A7 calculator around ncr_core (pins in board/nexys_a7.xdc).
 BOARD=(board/uart_tx.vhd board/bin2bcd.vhd board/btn_pulse.vhd board/ncr_report.vhd board/nexys_a7_top.vhd)
@@ -189,7 +189,7 @@ cmd_schematic() {
   mkdir -p "$EV/schematic"
   cd "$WK"
   local rc=0 m
-  for m in alu reg_en sr_flag down_counter up_counter cmp_gt mux2 res_reg prodrem_reg muldiv_status muldiv_next muldiv_state_reg ncr_next ncr_state_reg cpu_alu regfile imem dmem wb_mux md_mux cpu_decode muldiv_dp muldiv_ctrl muldiv ncr_dp ncr_ctrl ncr_engine ncr_core cpu_ctrl cpu_dp cpu; do
+  for m in alu reg_en sr_flag down_counter up_counter cmp_gt mux2 res_reg prodrem_reg muldiv_status muldiv_next muldiv_state_reg ncr_next ncr_state_reg cpu_alu regfile imem dmem mem_map wb_mux md_mux cpu_decode muldiv_dp muldiv_ctrl muldiv ncr_dp ncr_ctrl ncr_engine ncr_core cpu_ctrl cpu_dp cpu; do
     record "schematic-$m" yosys -m ghdl -p \
       "ghdl --std=08 ${RTL_ABS[*]} -e $m; prep -top $m; opt_clean -purge; write_json $WK/$m.json" || { rc=1; continue; }
     "$NETLISTSVG" "$WK/$m.json" -o "$EV/schematic/$m.svg" || rc=1
