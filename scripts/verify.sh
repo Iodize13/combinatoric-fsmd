@@ -3,7 +3,7 @@
 #   scripts/verify.sh doctor
 #   scripts/verify.sh sim [N_MAX]
 #   scripts/verify.sh ncr N R
-#   scripts/verify.sh formal [muldiv|ncr] [prove|bmc|cover]
+#   scripts/verify.sh formal [muldiv|ncr|equiv] [task]
 #   scripts/verify.sh tla
 #   scripts/verify.sh synth
 #   scripts/verify.sh all
@@ -61,8 +61,9 @@ cmd_sim() {
   prep_dirs
   cd "$WK"
   record sim-analyze ghdl -a --std=08 --workdir="$WK" \
-    "${RTL_ABS[@]}" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd"
-  for tb in tb_muldiv tb_ncr; do
+    "${RTL_ABS[@]}" "$ROOT/formal/ref/muldiv_ref.vhd" "$ROOT/formal/ref/ncr_core_ref.vhd" \
+    "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd"
+  for tb in tb_muldiv tb_ncr tb_equiv; do
     record "sim-elab-$tb" ghdl -e --std=08 --workdir="$WK" "$tb" || { rc=1; continue; }
     local gen=(); [ "$tb" = tb_ncr ] && gen=(-gN_MAX="$nmax")
     record "sim-run-$tb" ghdl -r --std=08 --workdir="$WK" "$tb" "${gen[@]}" \
@@ -85,12 +86,13 @@ cmd_formal() {
   local design=${1:-all} task=${2:-}
   prep_dirs
   cd "$ROOT/formal"
-  local designs=(muldiv ncr); [ "$design" = all ] || designs=("$design")
+  local designs=(muldiv ncr equiv); [ "$design" = all ] || designs=("$design")
   local rc=0 d t tasks
   for d in "${designs[@]}"; do
     # muldiv: PDR proof at W=4 plus BMC at W=6; ncr: BMC only.
     if [ -n "$task" ]; then tasks=("$task")
     elif [ "$d" = ncr ]; then tasks=(bmc cover)
+    elif [ "$d" = equiv ]; then tasks=(muldiv_prove muldiv_bmc ncr_prove ncr_bmc)
     else tasks=(prove bmc cover); fi
     for t in "${tasks[@]}"; do
       local job="formal-$d-$t" out="$WK/sby-$d-$t"

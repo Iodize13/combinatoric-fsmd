@@ -1,0 +1,42 @@
+# Cycle-exact equivalence of the RTL against the frozen reference in formal/ref/.
+# muldiv_prove / ncr_prove: unbounded (PDR) at small W. *_bmc: bounded at a larger W.
+# When RTL files are added, list them in [files] and in each ghdl line below (compile order).
+[tasks]
+muldiv_prove
+muldiv_bmc
+ncr_prove
+ncr_bmc
+
+[options]
+muldiv_prove: mode prove
+ncr_prove: mode prove
+muldiv_bmc: mode bmc
+muldiv_bmc: depth 40
+ncr_bmc: mode bmc
+ncr_bmc: depth 100
+
+[engines]
+muldiv_prove: abc pdr
+ncr_prove: abc pdr
+muldiv_bmc: smtbmc yices
+ncr_bmc: smtbmc yices
+
+[script]
+plugin -i ghdl
+muldiv_prove: ghdl --std=08 -gW=4 muldiv_pkg.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
+muldiv_bmc: ghdl --std=08 -gW=8 muldiv_pkg.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
+ncr_prove: ghdl --std=08 -gW=3 muldiv_pkg.vhd muldiv.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
+ncr_bmc: ghdl --std=08 -gW=5 muldiv_pkg.vhd muldiv.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
+muldiv_prove: prep -top equiv_muldiv
+muldiv_bmc: prep -top equiv_muldiv
+ncr_prove: prep -top equiv_ncr
+ncr_bmc: prep -top equiv_ncr
+
+[files]
+../rtl/muldiv_pkg.vhd
+../rtl/muldiv.vhd
+../rtl/ncr_core.vhd
+ref/muldiv_ref.vhd
+ref/ncr_core_ref.vhd
+equiv_muldiv.vhd
+equiv_ncr.vhd
