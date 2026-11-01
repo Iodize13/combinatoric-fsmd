@@ -1,6 +1,6 @@
--- nCr datapath: operand/loop registers, comparators, adders, and the muldiv unit as its
--- multiply/divide functional unit. It only executes the control word and reports status;
--- every decision is taken in ncr_ctrl. Structural: instances and wires.
+-- nCr datapath: operand/loop registers, comparators and adders. The multiply/divide unit is
+-- outside (md_* ports) so a CPU can share it. It only executes the control word and reports
+-- status; every decision is taken in ncr_ctrl. Structural: instances and wires.
 -- k_reg and nmk_reg load through a 2-input mux (k_swap) so reg_en stays a plain register.
 library ieee;
 use ieee.std_logic_1164.all;
@@ -18,7 +18,15 @@ entity ncr_dp is
     r      : in  unsigned(W-1 downto 0);
     status : out ncr_status_t;
     result : out unsigned(W-1 downto 0);
-    ovf    : out std_logic
+    ovf    : out std_logic;
+    -- to/from the shared muldiv unit
+    md_start : out std_logic;
+    md_op    : out muldiv_op_t;
+    md_a     : out unsigned(W-1 downto 0);
+    md_b     : out unsigned(W-1 downto 0);
+    md_lo    : in  unsigned(W-1 downto 0);
+    md_done  : in  std_logic;
+    md_ovf   : in  std_logic
   );
 end entity;
 
@@ -29,12 +37,9 @@ architecture rtl of ncr_dp is
   signal n_minus_r      : unsigned(W-1 downto 0);
   signal k_d, nmk_d     : unsigned(W-1 downto 0);
   signal nmk_plus_i     : unsigned(W-1 downto 0);
-  signal md_b, md_lo    : unsigned(W-1 downto 0);
   signal r_gt_n         : std_logic;
   signal r_gt_n_minus_r : std_logic;
   signal i_gt_k         : std_logic;
-  signal md_done        : std_logic;
-  signal md_ovf         : std_logic;
 begin
   n_reg : entity work.reg_en
     generic map (W => W)
@@ -95,28 +100,16 @@ begin
   ovf_flag : entity work.sr_flag
     port map (clk => clk, rst => rst, clr => ctrl.ovf_clear, set => ctrl.ovf_set, q => ovf);
 
-  md : entity work.muldiv
-    generic map (W => W)
-    port map (
-      clk   => clk,
-      rst   => rst,
-      start => ctrl.md_start,
-      op    => ctrl.md_op,
-      a     => res_q,
-      b     => md_b,
-      hi    => open,
-      lo    => md_lo,
-      busy  => open,
-      done  => md_done,
-      dz    => open,
-      ovf   => md_ovf
-    );
 
   status.r_gt_n         <= r_gt_n;
   status.r_gt_n_minus_r <= r_gt_n_minus_r;
   status.i_gt_k         <= i_gt_k;
   status.md_done        <= md_done;
   status.md_ovf         <= md_ovf;
+
+  md_start <= ctrl.md_start;
+  md_op    <= ctrl.md_op;
+  md_a     <= res_q;
 
   result <= res_q;
 end architecture;
