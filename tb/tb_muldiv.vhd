@@ -40,7 +40,7 @@ begin
     variable x, y   : word;
     variable want   : unsigned(2*W-1 downto 0);
 
-    procedure run(o : muldiv_op_t; xa, xb : word) is
+    procedure issue(o : muldiv_op_t; xa, xb : word) is
     begin
       op <= o; a <= xa; b <= xb; start <= '1';
       wait until rising_edge(clk);
@@ -56,7 +56,7 @@ begin
 
     procedure check_mul(xa, xb : word) is
     begin
-      run(OP_MULTU, xa, xb);
+      issue(OP_MULTU, xa, xb);
       if hi & lo /= xa * xb then
         fail("MULTU " & to_hstring(xa) & "*" & to_hstring(xb) & " got " & to_hstring(hi & lo));
       end if;
@@ -65,7 +65,7 @@ begin
 
     procedure check_div(xa, xb : word) is
     begin
-      run(OP_DIVU, xa, xb);
+      issue(OP_DIVU, xa, xb);
       if xb = 0 then
         if dz /= '1' then fail("DIVU by 0 without dz"); end if;
       elsif dz /= '0' or ovf /= '0' or lo /= xa / xb or hi /= xa mod xb then
@@ -78,9 +78,9 @@ begin
     -- MULTU then DIVHL on the product: the nCr access pattern.
     procedure check_muldiv(xa, xb, xd : word) is
     begin
-      run(OP_MULTU, xa, xb);
+      issue(OP_MULTU, xa, xb);
       want := xa * xb;
-      run(OP_DIVHL, (others => '0'), xd);
+      issue(OP_DIVHL, (others => '0'), xd);
       if xd = 0 then
         if dz /= '1' then fail("DIVHL by 0 without dz"); end if;
       elsif want(2*W-1 downto W) >= xd then

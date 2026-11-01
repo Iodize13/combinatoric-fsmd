@@ -55,46 +55,46 @@ end entity;
 
 architecture rtl of muldiv is
   type phase_t is (P_IDLE, P_MUL, P_DIV_SHIFT0, P_DIV_SUB, P_DIV_TEST, P_DIV_FIX);
-  signal phase       : phase_t;
+  signal phase_r     : phase_t;
   signal rem_r       : unsigned(2*W downto 0);
-  signal m           : unsigned(W-1 downto 0);
-  signal cnt         : natural range 0 to W;
+  signal m_r         : unsigned(W-1 downto 0);
+  signal cnt_r       : natural range 0 to W;
   signal dz_r, ovf_r : std_logic;
 
   -- The one shared ALU, W+1 bits: left half of rem_r +/- M, modulo 2**(W+1).
   signal alu_y   : unsigned(W downto 0);
   signal alu_sub : std_logic;
 begin
-  alu_sub <= '1' when phase = P_DIV_SUB else '0';
-  alu_y   <= rem_r(2*W downto W) - ('0' & m) when alu_sub = '1' else
-             rem_r(2*W downto W) + ('0' & m);
+  alu_sub <= '1' when phase_r = P_DIV_SUB else '0';
+  alu_y   <= rem_r(2*W downto W) - ('0' & m_r) when alu_sub = '1' else
+             rem_r(2*W downto W) + ('0' & m_r);
 
   process (clk)
   begin
     if rising_edge(clk) then
       done <= '0';
       if rst = '1' then
-        phase <= P_IDLE;
-        cnt   <= 0;
-        rem_r <= (others => '0');
-        m     <= (others => '0');
-        dz_r  <= '0';
-        ovf_r <= '0';
+        phase_r <= P_IDLE;
+        cnt_r   <= 0;
+        rem_r   <= (others => '0');
+        m_r     <= (others => '0');
+        dz_r    <= '0';
+        ovf_r   <= '0';
       else
-        case phase is
+        case phase_r is
           when P_IDLE =>
             if start = '1' then
               dz_r  <= '0';
               ovf_r <= '0';
-              m     <= b;
+              m_r   <= b;
               if op = OP_DIVHL then
                 rem_r <= '0' & rem_r(2*W-1 downto 0);
               else
                 rem_r <= resize(a, 2*W+1);
               end if;
               if op = OP_MULTU then
-                cnt   <= W;
-                phase <= P_MUL;
+                cnt_r   <= W;
+                phase_r <= P_MUL;
               elsif b = 0 then
                 dz_r <= '1';
                 done <= '1';
@@ -102,7 +102,7 @@ begin
                 ovf_r <= '1';
                 done  <= '1';
               else
-                phase <= P_DIV_SHIFT0;
+                phase_r <= P_DIV_SHIFT0;
               end if;
             end if;
 
@@ -113,20 +113,20 @@ begin
             else
               rem_r <= "00" & rem_r(2*W-1 downto 1);
             end if;
-            if cnt = 1 then
-              phase <= P_IDLE;
-              done  <= '1';
+            if cnt_r = 1 then
+              phase_r <= P_IDLE;
+              done    <= '1';
             end if;
-            cnt <= cnt - 1;
+            cnt_r <= cnt_r - 1;
 
           when P_DIV_SHIFT0 =>
-            rem_r <= rem_r(2*W-1 downto 0) & '0';
-            cnt   <= W;
-            phase <= P_DIV_SUB;
+            rem_r   <= rem_r(2*W-1 downto 0) & '0';
+            cnt_r   <= W;
+            phase_r <= P_DIV_SUB;
 
           when P_DIV_SUB =>
             rem_r(2*W downto W) <= alu_y;
-            phase               <= P_DIV_TEST;
+            phase_r             <= P_DIV_TEST;
 
           when P_DIV_TEST =>
             -- The sign of the difference is the top bit of the left half.
@@ -135,17 +135,17 @@ begin
             else
               rem_r <= rem_r(2*W-1 downto 0) & '1';
             end if;
-            if cnt = 1 then
-              phase <= P_DIV_FIX;
+            if cnt_r = 1 then
+              phase_r <= P_DIV_FIX;
             else
-              phase <= P_DIV_SUB;
+              phase_r <= P_DIV_SUB;
             end if;
-            cnt <= cnt - 1;
+            cnt_r <= cnt_r - 1;
 
           when P_DIV_FIX =>
-            rem_r <= '0' & rem_r(2*W downto W+1) & rem_r(W-1 downto 0);
-            phase <= P_IDLE;
-            done  <= '1';
+            rem_r   <= '0' & rem_r(2*W downto W+1) & rem_r(W-1 downto 0);
+            phase_r <= P_IDLE;
+            done    <= '1';
         end case;
       end if;
     end if;
@@ -153,7 +153,7 @@ begin
 
   hi   <= rem_r(2*W-1 downto W);
   lo   <= rem_r(W-1 downto 0);
-  busy <= '0' when phase = P_IDLE else '1';
+  busy <= '0' when phase_r = P_IDLE else '1';
   dz   <= dz_r;
   ovf  <= ovf_r;
 end architecture;
