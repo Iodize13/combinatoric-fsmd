@@ -23,6 +23,6 @@ Preconditions: baseline from README.
 
 ## Gotchas
 
-- The model is hand-kept in sync with `rtl/ncr_core.vhd`. A change to the FSM in VHDL that is not mirrored here makes this proof about a different machine.
+- The model is hand-kept in sync with `rtl/ncr_ctrl.vhd`. A change to the FSM in VHDL that is not mirrored here makes this proof about a different machine.
 - TLC integers are 32-bit signed, so `Width = 32` aborts with `Overflow when computing 2^32`. Keep Width small enough that C(MaxN, MaxN/2) exceeds 2^Width - 1, or the overflow branch is never explored.
 - Raising MaxN past ~12 makes Fact() slow. Prefer small MaxN, because sim covers range.

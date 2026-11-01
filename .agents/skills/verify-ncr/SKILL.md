@@ -1,6 +1,6 @@
 ---
 name: verify-ncr
-description: Verify the VHDL nCr FSMD and its shared 32-bit multiply/divide unit (rtl/muldiv.vhd, rtl/ncr_core.vhd) with GHDL simulation, SymbiYosys + PSL formal checks, a TLA+ control model, and a Yosys synth check. Use after any change under rtl/, tb/, formal/, or spec/, or before claiming the hardware computes nCr / MULTU / DIVU / DIVHL correctly.
+description: Verify the VHDL nCr FSMD and its shared 32-bit multiply/divide unit (rtl/muldiv*.vhd, rtl/ncr_*.vhd) with GHDL simulation, SymbiYosys + PSL formal checks, a TLA+ control model, and a Yosys synth check. Use after any change under rtl/, tb/, formal/, or spec/, or before claiming the hardware computes nCr / MULTU / DIVU / DIVHL correctly.
 ---
 
 # verify-ncr
@@ -15,8 +15,13 @@ Everything goes through one script: `scripts/verify.sh`.
 
 | Path | What |
 |---|---|
-| `rtl/muldiv.vhd` | shared unsigned MULTU / DIVU / DIVHL unit, "approach 2": one W+1-bit ALU, a 2W+1-bit remainder/product register (HI:LO plus a carry bit). MULTU takes W cycles, and divide takes 2W+2 cycles (slide flow: shift, then subtract/test per bit, then a final fix) |
-| `rtl/ncr_core.vhd` | nCr FSMD: `res = res*(n-k+i)/i` using MULTU then DIVHL on HI:LO |
+| `rtl/muldiv.vhd` | structural top of the shared unsigned MULTU / DIVU / DIVHL unit (ports unchanged): `muldiv_ctrl` drives `muldiv_dp` |
+| `rtl/muldiv_dp.vhd`, `rtl/alu.vhd` | datapath, "approach 2": M register, a 2W+1-bit Product/Remainder register (HI:LO plus a carry bit), counter, dz/ovf flags, and one W+1-bit ALU |
+| `rtl/muldiv_ctrl.vhd` | phase FSM + registered `done`; decides from `start`/`op`/status and emits the control word. MULTU takes W cycles, and divide takes 2W+2 cycles (slide flow: shift, then subtract/test per bit, then a final fix) |
+| `rtl/muldiv_pkg.vhd` | `muldiv_op_t`, `rem_op_t`, and the `muldiv_ctrl_t` / `muldiv_status_t` records |
+| `rtl/ncr_core.vhd` | structural top of the nCr FSMD (ports unchanged): `ncr_ctrl` drives `ncr_dp` |
+| `rtl/ncr_dp.vhd`, `rtl/ncr_pkg.vhd` | datapath: registers, comparators, adders, and the muldiv instance; `ncr_ctrl_t` / `ncr_status_t` records |
+| `rtl/ncr_ctrl.vhd` | `state_t` FSM + registered `done`: `res = res*(n-k+i)/i` using MULTU then DIVHL on HI:LO |
 | `tb/tb_muldiv.vhd` | W=32 edge + random (2000) checks, including MULTU→DIVHL |
 | `tb/tb_ncr.vhd` | W=32 exhaustive n=0..N_MAX, r=0..n+1 against Pascal |
 | `formal/*_props.vhd` | PSL harnesses (assume/assert/cover, VHDL-2008) |

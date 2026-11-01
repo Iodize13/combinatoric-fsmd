@@ -13,7 +13,7 @@ One W+1-bit ALU and one 2W+1-bit register (HI:LO plus a carry bit) serve both un
 
 ## How to get to it (user POV)
 
-- Ports of `entity muldiv` in `rtl/muldiv.vhd`, with op codes from `muldiv_pkg`.
+- Ports of `entity muldiv` in `rtl/muldiv.vhd` (a structural top over `muldiv_ctrl` and `muldiv_dp`), with op codes from `muldiv_pkg`.
 - Indirectly through `ncr_core`, which issues MULTU then DIVHL.
 
 ## Driving it with scripts/verify.sh
