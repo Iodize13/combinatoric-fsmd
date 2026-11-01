@@ -1,0 +1,29 @@
+# prove: unbounded PDR proof at W=4 (PDR cannot close the multiplier at W=8).
+# bmc:   bounded check at W=6 over 2 back-to-back operations from reset (W=8 took >400s).
+[tasks]
+prove
+bmc
+cover
+
+[options]
+prove: mode prove
+bmc: mode bmc
+bmc: depth 18
+cover: mode cover
+cover: depth 24
+
+[engines]
+prove: abc pdr
+bmc: smtbmc yices
+cover: smtbmc yices
+
+[script]
+plugin -i ghdl
+prove: ghdl --std=08 -gW=4 muldiv.vhd muldiv_props.vhd -e muldiv_props
+bmc: ghdl --std=08 -gW=6 muldiv.vhd muldiv_props.vhd -e muldiv_props
+cover: ghdl --std=08 -gW=8 muldiv.vhd muldiv_props.vhd -e muldiv_props
+prep -top muldiv_props
+
+[files]
+../rtl/muldiv.vhd
+muldiv_props.vhd

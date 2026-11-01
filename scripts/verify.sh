@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# Verification driver for the nCr FSMD.
+#   scripts/verify.sh doctor
+#   scripts/verify.sh sim [N_MAX]
+#   scripts/verify.sh ncr N R
+#   scripts/verify.sh formal [muldiv|ncr] [prove|bmc|cover]
+#   scripts/verify.sh tla
+#   scripts/verify.sh synth
+#   scripts/verify.sh all
+#   scripts/verify.sh clean [RUN_ID]
+# Evidence:   evidence/<RUN_ID>/   (kept by clean)
+# Scratch:    build/<RUN_ID>/      (removed by clean)
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
+OCS=${OSS_CAD_SUITE:-$HOME/.local/opt/oss-cad-suite}
+TLA_JAR=${TLA2TOOLS:-$HOME/.local/opt/tla/tla2tools.jar}
+RUN_ID=${RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}
+EV="$ROOT/evidence/$RUN_ID"
+WK="$ROOT/build/$RUN_ID"
+
+export PATH="$OCS/bin:$PATH"
+
+prep_dirs() { mkdir -p "$EV" "$WK"; }
+
+# Run a command, tee output to an evidence log, record the exit code.
+record() {
+  local name=$1; shift
+  printf '$ %s\n' "$*" > "$EV/$name.log"
+  set +e
+  "$@" >> "$EV/$name.log" 2>&1
+  local rc=$?
+  set -e
+  echo "$rc" > "$EV/$name.exit"
+  printf '%-22s exit=%s  log=%s\n' "$name" "$rc" "$EV/$name.log"
+  return "$rc"
+}
+
+cmd_doctor() {
+  local ok=0
+  for t in ghdl yosys sby yosys-smtbmc yices-smt2 yosys-abc java; do
+    if command -v "$t" >/dev/null; then printf 'ok   %-14s %s\n' "$t" "$(command -v "$t")"
+    else printf 'MISS %s\n' "$t"; ok=1; fi
+  done
+  if yosys -m ghdl -q -p 'help ghdl' >/dev/null 2>&1; then echo "ok   ghdl-yosys-plugin"
+  else echo "MISS ghdl-yosys-plugin"; ok=1; fi
+  if [ -f "$TLA_JAR" ]; then echo "ok   tla2tools.jar  $TLA_JAR"; else echo "MISS tla2tools.jar ($TLA_JAR)"; ok=1; fi
+  command -v ghdl >/dev/null && ghdl --version | head -1
+  for f in rtl/muldiv.vhd rtl/ncr_core.vhd tb/tb_muldiv.vhd tb/tb_ncr.vhd formal/muldiv.sby formal/ncr.sby spec/NcrFsm.tla; do
+    [ -f "$ROOT/$f" ] || { echo "MISS $f"; ok=1; }
+  done
+  return $ok
+}
+
+cmd_sim() {
+  local nmax=${1:-30} rc=0
+  prep_dirs
+  cd "$WK"
+  record sim-analyze ghdl -a --std=08 --workdir="$WK" \
+    "$ROOT/rtl/muldiv.vhd" "$ROOT/rtl/ncr_core.vhd" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd"
+  for tb in tb_muldiv tb_ncr; do
+    record "sim-elab-$tb" ghdl -e --std=08 --workdir="$WK" "$tb" || { rc=1; continue; }
+    local gen=(); [ "$tb" = tb_ncr ] && gen=(-gN_MAX="$nmax")
+    record "sim-run-$tb" ghdl -r --std=08 --workdir="$WK" "$tb" "${gen[@]}" \
+      --assert-level=error --wave="$EV/$tb.ghw" || rc=1
+    grep -h 'TB PASS' "$EV/sim-run-$tb.log" || { echo "$tb: no 'TB PASS' line"; rc=1; }
+  done
+  return $rc
+}
+
+cmd_ncr() {
+  [ $# -eq 2 ] || { echo "usage: scripts/verify.sh ncr N R"; return 2; }
+  mkdir -p "$WK"
+  cd "$WK"
+  ghdl -a --std=08 --workdir="$WK" "$ROOT/rtl/muldiv.vhd" "$ROOT/rtl/ncr_core.vhd" "$ROOT/tb/ncr_run.vhd"
+  ghdl -e --std=08 --workdir="$WK" ncr_run
+  ghdl -r --std=08 --workdir="$WK" ncr_run -gN="$1" -gR="$2" 2>&1 | sed 's/^.*(report note): //'
+}
+
+cmd_formal() {
+  local design=${1:-all} task=${2:-}
+  prep_dirs
+  cd "$ROOT/formal"
+  local designs=(muldiv ncr); [ "$design" = all ] || designs=("$design")
+  local rc=0 d t tasks
+  for d in "${designs[@]}"; do
+    # muldiv: PDR proof at W=4 plus BMC at W=8; ncr: BMC only.
+    if [ -n "$task" ]; then tasks=("$task")
+    elif [ "$d" = ncr ]; then tasks=(bmc cover)
+    else tasks=(prove bmc cover); fi
+    for t in "${tasks[@]}"; do
+      local job="formal-$d-$t" out="$WK/sby-$d-$t"
+      record "$job" sby -f -d "$out" "$ROOT/formal/$d.sby" "$t" || rc=1
+      grep -h 'DONE (' "$EV/$job.log" | tail -1 > "$EV/$job.status" || true
+      mkdir -p "$EV/$job-traces"
+      find "$out" -name '*.vcd' -exec cp --backup=numbered {} "$EV/$job-traces/" \; 2>/dev/null || true
+    done
+  done
+  return $rc
+}
+
+cmd_tla() {
+  prep_dirs
+  cd "$ROOT/spec"
+  record tla-tlc java -XX:+UseParallelGC -cp "$TLA_JAR" tlc2.TLC \
+    -workers auto -metadir "$WK/tlc" -config NcrFsm.cfg NcrFsm.tla
+  grep -q 'No error has been found' "$EV/tla-tlc.log"
+}
+
+cmd_synth() {
+  prep_dirs
+  cd "$WK"
+  record synth yosys -m ghdl -p "ghdl --std=08 $ROOT/rtl/muldiv.vhd $ROOT/rtl/ncr_core.vhd -e ncr_core; synth -top ncr_core; stat"
+}
+
+cmd_all() {
+  local rc=0
+  cmd_doctor > /dev/null || { echo "doctor failed; run: scripts/verify.sh doctor"; return 1; }
+  cmd_sim || rc=1
+  cmd_formal || rc=1
+  cmd_tla || rc=1
+  cmd_synth || rc=1
+  echo "evidence: $EV"
+  return $rc
+}
+
+cmd_clean() {
+  # Scratch only; evidence/ survives. With a RUN_ID, removes only that run's scratch.
+  local target="$ROOT/build"
+  [ -z "${1:-}" ] || target="$ROOT/build/$1"
+  rm -rf -- "$target"
+  echo "removed $target (evidence kept in $ROOT/evidence)"
+}
+
+case "${1:-}" in
+  doctor) shift; cmd_doctor "$@" ;;
+  sim)    shift; cmd_sim "$@" ;;
+  ncr)    shift; cmd_ncr "$@" ;;
+  formal) shift; cmd_formal "$@" ;;
+  tla)    shift; cmd_tla "$@" ;;
+  synth)  shift; cmd_synth "$@" ;;
+  all)    shift; cmd_all "$@" ;;
+  clean)  shift; cmd_clean "$@" ;;
+  *) sed -n '2,12p' "$0"; exit 2 ;;
+esac
