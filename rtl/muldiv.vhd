@@ -1,23 +1,33 @@
 -- Shared unsigned multiply/divide unit, "approach 2" from w03c_mult:
--- one W-bit ALU, one 2W-bit HI:LO register, one M register (multiplicand or divisor).
--- W cycles per operation; hi/lo are valid in the cycle where done = '1'.
+-- one 2W+1-bit HI:LO remainder/product register, one M register (multiplicand or divisor),
+-- one adder/subtractor shared by multiply and divide.
+-- Multiply takes W cycles; divide takes 2W+2 (shift, then W x {subtract, test}, then fix-up).
+-- hi/lo are valid in the cycle where done = '1'.
 --
 --   op = OP_MULTU : HI:LO <= a * b
 --   op = OP_DIVU  : LO <= a / b, HI <= a mod b             (dividend = 0:a)
 --   op = OP_DIVHL : LO <= HI:LO / b, HI <= HI:LO mod b      (dividend = current HI:LO)
 --
+-- Divide is the refined restoring divider of the slides: Remainder := dividend, shifted
+-- left once; then W times: left half -= divisor, and if that went negative, add the
+-- divisor back and shift in a 0, else shift in a 1; finally the left half is shifted
+-- right once. HI = remainder, LO = quotient.
+--
+-- The ALU is not a plain W-bit adder. The divide's left half is W+1 bits (the dividend
+-- may be up to 2b-1 after the first shift, and the sign of the difference is its top
+-- bit), so the ALU is W+1 bits wide and the remainder register keeps one extra bit
+-- above HI.
+--
 -- Divide flags (latched until the next start):
 --   dz  = '1' : b = 0; no division is done (HI:LO holds the undivided dividend).
 --   ovf = '1' : OP_DIVHL with HI >= b, so the quotient would not fit in W bits.
+--               HI:LO is left as it was.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package muldiv_pkg is
-  subtype muldiv_op_t is std_logic_vector(1 downto 0);
-  constant OP_MULTU : muldiv_op_t := "00";
-  constant OP_DIVU  : muldiv_op_t := "01";
-  constant OP_DIVHL : muldiv_op_t := "10";
+  type muldiv_op_t is (OP_MULTU, OP_DIVU, OP_DIVHL);
 end package;
 
 library ieee;
@@ -44,102 +54,106 @@ entity muldiv is
 end entity;
 
 architecture rtl of muldiv is
-  signal hi_r, lo_r, m : unsigned(W-1 downto 0);
-  signal is_div        : std_logic;
-  signal cnt           : natural range 0 to W;
-  signal run           : std_logic;
-  signal dz_r, ovf_r   : std_logic;
+  type phase_t is (P_IDLE, P_MUL, P_DIV_SHIFT0, P_DIV_SUB, P_DIV_TEST, P_DIV_FIX);
+  signal phase_r     : phase_t;
+  signal rem_r       : unsigned(2*W downto 0);
+  signal m_r         : unsigned(W-1 downto 0);
+  signal cnt_r       : natural range 0 to W;
+  signal dz_r, ovf_r : std_logic;
 
-  -- The one shared ALU: W-bit add or subtract with carry/borrow out.
-  signal alu_a, alu_sum : unsigned(W downto 0);
-  signal alu_sub        : std_logic;
+  -- The one shared ALU, W+1 bits: left half of rem_r +/- M, modulo 2**(W+1).
+  signal alu_y   : unsigned(W downto 0);
+  signal alu_sub : std_logic;
 begin
-  alu_sub <= is_div;
-  alu_a   <= '0' & hi_r                       when is_div = '0' else
-             '0' & hi_r(W-2 downto 0) & lo_r(W-1);
-  alu_sum <= alu_a + ('0' & m)                when alu_sub = '0' else
-             alu_a - ('0' & m);
+  alu_sub <= '1' when phase_r = P_DIV_SUB else '0';
+  alu_y   <= rem_r(2*W downto W) - ('0' & m_r) when alu_sub = '1' else
+             rem_r(2*W downto W) + ('0' & m_r);
 
   process (clk)
-    variable fits : boolean;
   begin
     if rising_edge(clk) then
       done <= '0';
       if rst = '1' then
-        run    <= '0';
-        cnt    <= 0;
-        is_div <= '0';
-        hi_r   <= (others => '0');
-        lo_r   <= (others => '0');
-        m      <= (others => '0');
-        dz_r   <= '0';
-        ovf_r  <= '0';
-      elsif run = '0' then
-        if start = '1' then
-          dz_r  <= '0';
-          ovf_r <= '0';
-          m     <= b;
-          case op is
-            when OP_MULTU =>
-              is_div <= '0';
-              hi_r   <= (others => '0');
-              lo_r   <= a;
-              cnt    <= W;
-              run    <= '1';
-            when OP_DIVU | OP_DIVHL =>
-              is_div <= '1';
-              if op = OP_DIVU then
-                hi_r <= (others => '0');
-                lo_r <= a;
+        phase_r <= P_IDLE;
+        cnt_r   <= 0;
+        rem_r   <= (others => '0');
+        m_r     <= (others => '0');
+        dz_r    <= '0';
+        ovf_r   <= '0';
+      else
+        case phase_r is
+          when P_IDLE =>
+            if start = '1' then
+              dz_r  <= '0';
+              ovf_r <= '0';
+              m_r   <= b;
+              if op = OP_DIVHL then
+                rem_r <= '0' & rem_r(2*W-1 downto 0);
+              else
+                rem_r <= resize(a, 2*W+1);
               end if;
-              if b = 0 then
+              if op = OP_MULTU then
+                cnt_r   <= W;
+                phase_r <= P_MUL;
+              elsif b = 0 then
                 dz_r <= '1';
                 done <= '1';
-              elsif op = OP_DIVHL and hi_r >= b then
+              elsif op = OP_DIVHL and rem_r(2*W-1 downto W) >= b then
                 ovf_r <= '1';
                 done  <= '1';
               else
-                cnt <= W;
-                run <= '1';
+                phase_r <= P_DIV_SHIFT0;
               end if;
-            when others =>
-              done <= '1';
-          end case;
-        end if;
-      else
-        if is_div = '0' then
-          -- Multiply: if LO(0) = 1 add M into HI; then shift {carry, HI, LO} right.
-          if lo_r(0) = '1' then
-            hi_r <= alu_sum(W downto 1);
-            lo_r <= alu_sum(0) & lo_r(W-1 downto 1);
-          else
-            hi_r <= '0' & hi_r(W-1 downto 1);
-            lo_r <= hi_r(0) & lo_r(W-1 downto 1);
-          end if;
-        else
-          -- Divide: shift {HI, LO} left; if the shifted HI >= M, subtract and set the quotient bit.
-          -- The shifted HI is W+1 bits wide: the bit pushed out of HI(W-1) counts as 2^W.
-          fits := hi_r(W-1) = '1' or alu_sum(W) = '0';
-          if fits then
-            hi_r <= alu_sum(W-1 downto 0);
-            lo_r <= lo_r(W-2 downto 0) & '1';
-          else
-            hi_r <= hi_r(W-2 downto 0) & lo_r(W-1);
-            lo_r <= lo_r(W-2 downto 0) & '0';
-          end if;
-        end if;
-        if cnt = 1 then
-          run  <= '0';
-          done <= '1';
-        end if;
-        cnt <= cnt - 1;
+            end if;
+
+          when P_MUL =>
+            -- If LO(0) = 1 add M into HI; then shift {carry, HI, LO} right.
+            if rem_r(0) = '1' then
+              rem_r <= '0' & alu_y & rem_r(W-1 downto 1);
+            else
+              rem_r <= "00" & rem_r(2*W-1 downto 1);
+            end if;
+            if cnt_r = 1 then
+              phase_r <= P_IDLE;
+              done    <= '1';
+            end if;
+            cnt_r <= cnt_r - 1;
+
+          when P_DIV_SHIFT0 =>
+            rem_r   <= rem_r(2*W-1 downto 0) & '0';
+            cnt_r   <= W;
+            phase_r <= P_DIV_SUB;
+
+          when P_DIV_SUB =>
+            rem_r(2*W downto W) <= alu_y;
+            phase_r             <= P_DIV_TEST;
+
+          when P_DIV_TEST =>
+            -- The sign of the difference is the top bit of the left half.
+            if rem_r(2*W) = '1' then
+              rem_r <= alu_y(W-1 downto 0) & rem_r(W-1 downto 0) & '0';
+            else
+              rem_r <= rem_r(2*W-1 downto 0) & '1';
+            end if;
+            if cnt_r = 1 then
+              phase_r <= P_DIV_FIX;
+            else
+              phase_r <= P_DIV_SUB;
+            end if;
+            cnt_r <= cnt_r - 1;
+
+          when P_DIV_FIX =>
+            rem_r   <= '0' & rem_r(2*W downto W+1) & rem_r(W-1 downto 0);
+            phase_r <= P_IDLE;
+            done    <= '1';
+        end case;
       end if;
     end if;
   end process;
 
-  hi   <= hi_r;
-  lo   <= lo_r;
-  busy <= run;
+  hi   <= rem_r(2*W-1 downto W);
+  lo   <= rem_r(W-1 downto 0);
+  busy <= '0' when phase_r = P_IDLE else '1';
   dz   <= dz_r;
   ovf  <= ovf_r;
 end architecture;

@@ -1,12 +1,13 @@
 -- Formal harness for ncr_core (VHDL-2008 PSL, read by ghdl-yosys-plugin).
 -- Small W and N_MAX keep the state space tractable; the RTL is generic, so
--- the same logic is what runs at W = 32.
+-- the same logic is what runs at W = 32. N_MAX is chosen so C(n, r) can exceed
+-- 2^W - 1 (C(7,3) = 35 > 31 at W = 5), so the overflow path is reachable.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity ncr_props is
-  generic (W : positive := 6; N_MAX : natural := 6);
+  generic (W : positive := 5; N_MAX : natural := 7);
   port (
     clk   : in std_logic;
     rst   : in std_logic;
@@ -34,8 +35,27 @@ architecture formal of ncr_props is
 
   constant REF : tri_t := pascal;
 
-  -- Worst case: k = N_MAX/2 iterations of CHECK, MUL_START, W mul steps, MUL_WAIT, DIV_START, W div steps, DIV_WAIT.
-  constant LATENCY_BOUND : natural := 4 + (N_MAX / 2 + 1) * (2 * W + 5);
+  -- Budget per loop iteration is 3W + 8 cycles: a W-cycle multiply, a ~2W-cycle
+  -- slide-style divide, and FSM overhead. k <= N_MAX/2 iterations plus setup.
+  constant LATENCY_BOUND : natural := 4 + (N_MAX / 2 + 1) * (3 * W + 8);
+  constant MAX_RESULT    : natural := 2**W - 1;
+
+  -- Contract: an exact result when it fits in W bits, otherwise all ones with ovf = '1'.
+  function expected(a, b : natural) return unsigned is
+  begin
+    if REF(a)(b) > MAX_RESULT then
+      return to_unsigned(MAX_RESULT, W);
+    end if;
+    return to_unsigned(REF(a)(b), W);
+  end function;
+
+  function expected_ovf(a, b : natural) return std_logic is
+  begin
+    if REF(a)(b) > MAX_RESULT then
+      return '1';
+    end if;
+    return '0';
+  end function;
 
   signal result          : unsigned(W-1 downto 0);
   signal busy, done, ovf : std_logic;
@@ -71,15 +91,19 @@ begin
 
   assert_correct : assert always
     ((rst = '0' and done = '1' and launched = '1') ->
-       (result = to_unsigned(REF(to_integer(n_l))(to_integer(r_l)), W) and ovf = '0'));
+       (result = expected(to_integer(n_l), to_integer(r_l)) and
+        ovf = expected_ovf(to_integer(n_l), to_integer(r_l))));
 
   assert_bounded_latency : assert always (age <= LATENCY_BOUND);
 
   -- Covers require rst = '0' at every step; otherwise they match in the undefined reset cycle.
-  cover_largest : cover {rst = '0' and start = '1' and busy = '0' and n = N_MAX and r = N_MAX / 2;
+  cover_exact   : cover {rst = '0' and start = '1' and busy = '0' and n = N_MAX - 1 and r = (N_MAX - 1) / 2;
                          (rst = '0' and done = '0')[*];
-                         rst = '0' and done = '1'};
+                         rst = '0' and done = '1' and ovf = '0'};
   cover_r_gt_n  : cover {rst = '0' and start = '1' and busy = '0' and n = 3 and r = 5;
                          (rst = '0' and done = '0')[*];
                          rst = '0' and done = '1' and result = 0};
+  cover_ovf     : cover {rst = '0' and start = '1' and busy = '0' and n = N_MAX and r = N_MAX / 2;
+                         (rst = '0' and done = '0')[*];
+                         rst = '0' and done = '1' and ovf = '1'};
 end architecture;

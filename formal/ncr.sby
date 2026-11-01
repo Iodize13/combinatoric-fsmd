@@ -4,16 +4,16 @@ cover
 
 [options]
 bmc: mode bmc
-bmc: depth 80
+bmc: depth 100
 cover: mode cover
-cover: depth 80
+cover: depth 100
 
 [engines]
 smtbmc yices
 
 [script]
 plugin -i ghdl
-ghdl --std=08 muldiv.vhd ncr_core.vhd ncr_props.vhd -e ncr_props
+ghdl --std=08 -gW=5 -gN_MAX=7 muldiv.vhd ncr_core.vhd ncr_props.vhd -e ncr_props
 prep -top ncr_props
 
 [files]

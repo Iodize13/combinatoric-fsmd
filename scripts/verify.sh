@@ -84,7 +84,7 @@ cmd_formal() {
   local designs=(muldiv ncr); [ "$design" = all ] || designs=("$design")
   local rc=0 d t tasks
   for d in "${designs[@]}"; do
-    # muldiv: PDR proof at W=4 plus BMC at W=8; ncr: BMC only.
+    # muldiv: PDR proof at W=4 plus BMC at W=6; ncr: BMC only.
     if [ -n "$task" ]; then tasks=("$task")
     elif [ "$d" = ncr ]; then tasks=(bmc cover)
     else tasks=(prove bmc cover); fi

@@ -15,14 +15,14 @@ Everything goes through one script: `scripts/verify.sh`.
 
 | Path | What |
 |---|---|
-| `rtl/muldiv.vhd` | shared unsigned MULTU / DIVU / DIVHL unit, "approach 2" (one W-bit ALU, 2W-bit HI:LO), W cycles per op |
+| `rtl/muldiv.vhd` | shared unsigned MULTU / DIVU / DIVHL unit, "approach 2": one W+1-bit ALU, a 2W+1-bit remainder/product register (HI:LO plus a carry bit). MULTU takes W cycles, and divide takes 2W+2 cycles (slide flow: shift, then subtract/test per bit, then a final fix) |
 | `rtl/ncr_core.vhd` | nCr FSMD: `res = res*(n-k+i)/i` using MULTU then DIVHL on HI:LO |
 | `tb/tb_muldiv.vhd` | W=32 edge + random (2000) checks, including MULTU→DIVHL |
 | `tb/tb_ncr.vhd` | W=32 exhaustive n=0..N_MAX, r=0..n+1 against Pascal |
 | `formal/*_props.vhd` | PSL harnesses (assume/assert/cover, VHDL-2008) |
-| `formal/muldiv.sby` | tasks `prove` (PDR, W=4), `bmc` (W=6, depth 18), `cover` (W=8) |
-| `formal/ncr.sby` | tasks `bmc` (W=6, N_MAX=6, depth 80), `cover` |
-| `spec/NcrFsm.tla` + `.cfg` | control-level model: LoopInv, ExactDivision, NoQuotOverflow, FinCorrect, Terminates |
+| `formal/muldiv.sby` | tasks `prove` (PDR, W=4), `bmc` (W=6, depth 28), `cover` (W=8, depth 44) |
+| `formal/ncr.sby` | tasks `bmc` (W=5, N_MAX=7, depth 100), `cover`; overflow is reachable (C(7,3) = 35 > 31) |
+| `spec/NcrFsm.tla` + `.cfg` | control-level model: LoopInv, ExactDivision, FinCorrect (exact or saturate), StopOnOvf, Terminates |
 
 ## Launch
 
@@ -66,11 +66,14 @@ Measured runtimes (2026-11-01, this machine):
 | Job | Time |
 |---|---|
 | sim | ~30 s |
-| muldiv prove | 19 s |
-| muldiv bmc | 105 s |
-| muldiv cover | 1 s |
-| ncr cover | 14 s |
-| tla | ~5 s |
+| muldiv prove | 161 s |
+| muldiv bmc | 683 s |
+| muldiv cover | 4 s |
+| ncr bmc | 641 s |
+| ncr cover | 65 s |
+| tla | 14 s |
+
+(These are the parallel run of 2026-11-02, RUN_ID=g6, with all jobs at once. Alone, each job is faster.)
 
 `ncr bmc` is the slowest job. Run it in the background, or alone, with a generous timeout
 (≥ 25 min).
@@ -126,6 +129,7 @@ use `pkill -f` with a pattern that also matches your own shell's command line.
 - PDR (`abc pdr`) cannot close the multiplier at W=8 (>260 s), and it hit the 500 s timeout
   on a ~100-step-deep ncr bug. Use BMC for anything deep.
 - A cover reached at a step shorter than one operation (< W+1 for muldiv) is vacuous. Check the `reached cover statement … at step N` lines. Covers must hold `rst = '0'` at every step.
+- ncr_core contract on overflow: `result` saturates to all ones, `ovf = 1`, and the loop stops at the first overflowing DIVHL.
 - DIVHL requires HI < divisor (quotient fits in W bits). Otherwise `ovf=1` and HI:LO stays
   unchanged. MIPS `div` has no such check.
 
