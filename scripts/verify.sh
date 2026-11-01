@@ -7,6 +7,8 @@
 #   scripts/verify.sh tla
 #   scripts/verify.sh synth
 #   scripts/verify.sh board-synth    # Nexys A7 top mapped to Artix-7 cells (synth_xilinx)
+#   scripts/verify.sh bitstream      # Nexys A7 .bit via openXC7; run inside its nix shell
+#   scripts/verify.sh program [BIT]  # load the .bit over USB-JTAG (openFPGALoader)
 #   scripts/verify.sh schematic        # RTL schematics as SVG (needs netlistsvg)
 #   scripts/verify.sh all
 #   scripts/verify.sh clean [RUN_ID]
@@ -17,6 +19,9 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 OCS=${OSS_CAD_SUITE:-$HOME/.local/opt/oss-cad-suite}
 TLA_JAR=${TLA2TOOLS:-$HOME/.local/opt/tla/tla2tools.jar}
+# Nexys A7 part (xc7a50tcsg324-1 for the -50T board) and where generated chipdbs are kept.
+NEXYS_PART=${NEXYS_PART:-xc7a100tcsg324-1}
+CHIPDB_DIR=${CHIPDB_DIR:-$HOME/.local/opt/openxc7/chipdb}
 NETLISTSVG=${NETLISTSVG:-$HOME/.local/opt/netlistsvg/node_modules/.bin/netlistsvg}
 RUN_ID=${RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}
 EV="$ROOT/evidence/$RUN_ID"
@@ -131,6 +136,48 @@ cmd_board_synth() {
   record board-synth yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e nexys_a7_top; synth_xilinx -top nexys_a7_top -flatten; stat"
 }
 
+# openXC7 flow (github.com/openXC7/demo-projects openXC7.mk): synth_xilinx -> nextpnr-xilinx
+# -> fpga-as. nextpnr-xilinx, bbasm and fpga-as come from the openXC7 nix dev shell, which
+# also sets NEXTPNR_XILINX_DIR and PRJXRAY_DB_DIR.
+cmd_bitstream() {
+  local t
+  for t in nextpnr-xilinx fpga-as; do
+    command -v "$t" >/dev/null || {
+      echo "MISS $t: run inside: nix --extra-experimental-features 'nix-command flakes' develop github:openxc7/toolchain-nix"
+      return 1
+    }
+  done
+  : "${NEXTPNR_XILINX_DIR:?not set; run inside the openXC7 nix shell}"
+  : "${PRJXRAY_DB_DIR:?not set; run inside the openXC7 nix shell}"
+  prep_dirs
+  cd "$WK"
+  local dbpart die out="$EV/board"
+  dbpart=$(echo "$NEXYS_PART" | sed -e 's/-[0-9]//g')
+  die=$(echo "$NEXYS_PART" | sed -E 's/^(xc7a[0-9]+t).*/\1/')
+  mkdir -p "$out" "$CHIPDB_DIR"
+  if [ ! -f "$CHIPDB_DIR/$dbpart.bin" ]; then
+    record board-chipdb sh -c "python3 '$NEXTPNR_XILINX_DIR/share/nextpnr/himbaechel/uarch/xilinx/gen/xilinx_gen.py' \
+        --xray '$PRJXRAY_DB_DIR/artix7' --device $die --bba '$WK/$dbpart.bba' &&
+      '$NEXTPNR_XILINX_DIR/bin/bbasm' -l '$WK/$dbpart.bba' '$CHIPDB_DIR/$dbpart.bin' &&
+      rm -f '$WK/$dbpart.bba'" || return 1
+  fi
+  record board-yosys yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e nexys_a7_top; synth_xilinx -flatten -abc9 -arch xc7 -top nexys_a7_top; write_json $WK/nexys_a7.json" || return 1
+  record board-pnr nextpnr-xilinx --chipdb "$CHIPDB_DIR/$dbpart.bin" --xdc "$ROOT/board/nexys_a7.xdc" \
+    --json "$WK/nexys_a7.json" --fasm "$WK/nexys_a7.fasm" || return 1
+  record board-bit sh -c "fpga-as --prjxray_db_path='$PRJXRAY_DB_DIR/artix7' --part $NEXYS_PART '$WK/nexys_a7.fasm' > '$out/nexys_a7.bit'" || return 1
+  grep -iE 'Max frequency|Critical path|ERROR' "$EV/board-pnr.log" | tail -5 || true
+  ls -l "$out/nexys_a7.bit"
+}
+
+cmd_program() {
+  local bit=${1:-} board=nexys_a7_100
+  [ -n "$bit" ] || bit=$(ls -t "$ROOT"/evidence/*/board/nexys_a7.bit 2>/dev/null | head -1)
+  [ -f "$bit" ] || { echo "no bitstream; run: scripts/verify.sh bitstream"; return 1; }
+  case "$NEXYS_PART" in xc7a50t*) board=nexys_a7_50 ;; esac
+  echo "loading $bit ($board, SRAM only: lost on power off)"
+  openFPGALoader -b "$board" --bitstream "$bit"
+}
+
 # One SVG per entity, hierarchy kept: structural tops show their sub-units as boxes.
 cmd_schematic() {
   prep_dirs
@@ -174,8 +221,10 @@ case "${1:-}" in
   tla)    shift; cmd_tla "$@" ;;
   synth)  shift; cmd_synth "$@" ;;
   board-synth) shift; cmd_board_synth "$@" ;;
+  bitstream) shift; cmd_bitstream "$@" ;;
+  program) shift; cmd_program "$@" ;;
   schematic) shift; cmd_schematic "$@" ;;
   all)    shift; cmd_all "$@" ;;
   clean)  shift; cmd_clean "$@" ;;
-  *) sed -n '2,13p' "$0"; exit 2 ;;
+  *) sed -n '2,15p' "$0"; exit 2 ;;
 esac
