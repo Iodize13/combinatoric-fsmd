@@ -13,19 +13,23 @@ Min(a, b) == IF a < b THEN a ELSE b
 
 States == {"IDLE", "INIT", "CHECK", "MUL", "DIV", "FIN"}
 
-VARIABLES state, n, r, nmr, k, i, res, prod
+VARIABLES state, n, r, nmr, k, i, res, prod, ovf
 
-vars == <<state, n, r, nmr, k, i, res, prod>>
+vars == <<state, n, r, nmr, k, i, res, prod, ovf>>
+
+MaxResult == 2 ^ Width - 1
 
 Init ==
   /\ state = "IDLE"
   /\ n = 0 /\ r = 0 /\ nmr = 0 /\ k = 0 /\ i = 0 /\ res = 0 /\ prod = 0
+  /\ ovf = FALSE
 
 Start ==
   /\ state = "IDLE"
   /\ \E a \in 0..MaxN, b \in 0..(MaxN + 1) :
        /\ n' = a /\ r' = b
   /\ state' = "INIT"
+  /\ ovf' = FALSE
   /\ UNCHANGED <<nmr, k, i, res, prod>>
 
 InitStep ==
@@ -37,22 +41,28 @@ InitStep ==
             /\ nmr' = n - Min(r, n - r)
             /\ res' = 1 /\ i' = 1
             /\ state' = "CHECK"
-  /\ UNCHANGED <<n, r, prod>>
+  /\ UNCHANGED <<n, r, prod, ovf>>
 
 Check ==
   /\ state = "CHECK"
   /\ state' = IF i > k THEN "FIN" ELSE "MUL"
-  /\ UNCHANGED <<n, r, nmr, k, i, res, prod>>
+  /\ UNCHANGED <<n, r, nmr, k, i, res, prod, ovf>>
 
 Mul ==
   /\ state = "MUL"
   /\ prod' = res * (nmr + i)
   /\ state' = "DIV"
-  /\ UNCHANGED <<n, r, nmr, k, i, res>>
+  /\ UNCHANGED <<n, r, nmr, k, i, res, ovf>>
 
+\* DIVHL refuses when HI >= i (quotient would not fit): ovf is set, HI:LO is
+\* left as it was and res takes LO of the undivided product.
 Div ==
   /\ state = "DIV"
-  /\ res' = prod \div i
+  /\ IF prod \div (2 ^ Width) >= i
+       THEN /\ ovf' = TRUE
+            /\ res' = prod % (2 ^ Width)
+       ELSE /\ ovf' = ovf
+            /\ res' = prod \div i
   /\ i' = i + 1
   /\ state' = "CHECK"
   /\ UNCHANGED <<n, r, nmr, k, prod>>
@@ -60,7 +70,7 @@ Div ==
 Fin ==
   /\ state = "FIN"
   /\ state' = "IDLE"
-  /\ UNCHANGED <<n, r, nmr, k, i, res, prod>>
+  /\ UNCHANGED <<n, r, nmr, k, i, res, prod, ovf>>
 
 Next == Start \/ InitStep \/ Check \/ Mul \/ Div \/ Fin
 
@@ -70,17 +80,22 @@ Spec == Init /\ [][Next]_vars /\ WF_vars(Next)
 
 TypeOK == state \in States
 
-\* Loop invariant: after i-1 iterations, res = C(nmr + i - 1, i - 1).
-LoopInv == state = "CHECK" => res = Binom(nmr + i - 1, i - 1)
+\* Loop invariant: after i-1 iterations without overflow, res = C(nmr + i - 1, i - 1).
+LoopInv == (state = "CHECK" /\ ~ovf) => res = Binom(nmr + i - 1, i - 1)
 
 \* The division in DIV never leaves a remainder: integer arithmetic is exact.
-ExactDivision == state = "DIV" => prod % i = 0
+ExactDivision == (state = "DIV" /\ ~ovf) => prod % i = 0
 
-\* DIVHL precondition: HI < i, i.e. the quotient fits in Width bits.
-NoQuotOverflow == state = "DIV" => prod \div (2 ^ Width) < i
+\* Contract at FIN: the exact C(n, r) when it fits in Width bits,
+\* otherwise ovf with res saturated to all ones.
+FinCorrect ==
+  state = "FIN" =>
+    IF Binom(n, r) > MaxResult
+      THEN ovf /\ res = MaxResult
+      ELSE ~ovf /\ res = Binom(n, r)
 
-\* When FIN is reached the answer is C(n, r).
-FinCorrect == state = "FIN" => res = Binom(n, r)
+\* Overflow stops the loop: no further multiply is started once ovf is set.
+StopOnOvf == ovf => state \notin {"MUL", "DIV"}
 
 \* Every started computation finishes.
 Terminates == (state = "INIT") ~> (state = "FIN")
