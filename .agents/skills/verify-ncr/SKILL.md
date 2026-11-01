@@ -36,6 +36,7 @@ Everything goes through one script: `scripts/verify.sh`.
 | `formal/*_props.vhd` | PSL harnesses (assume/assert/cover, VHDL-2008) |
 | `formal/muldiv.sby` | tasks `prove` (PDR, W=4), `bmc` (W=6, depth 28), `cover` (W=8, depth 44) |
 | `formal/ncr.sby` | tasks `bmc` (W=5, N_MAX=7, depth 100), `cover`; overflow is reachable (C(7,3) = 35 > 31) |
+| `formal/cpu.sby` | tasks `prove` (PDR) and `cover` on `cpu_props`: `cpu_ctrl` with any instruction word and abstract muldiv/ncr units (done within MAX_LAT=3), plus `regfile` |
 | `spec/NcrFsm.tla` + `.cfg` | control-level model: LoopInv, ExactDivision, FinCorrect (exact or saturate), StopOnOvf, Terminates |
 
 ## Launch
