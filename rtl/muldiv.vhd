@@ -25,14 +25,6 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-
-package muldiv_pkg is
-  type muldiv_op_t is (OP_MULTU, OP_DIVU, OP_DIVHL);
-end package;
-
-library ieee;
-use ieee.std_logic_1164.all;
-use ieee.numeric_std.all;
 use work.muldiv_pkg.all;
 
 entity muldiv is

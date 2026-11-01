@@ -21,6 +21,10 @@ WK="$ROOT/build/$RUN_ID"
 
 export PATH="$OCS/bin:$PATH"
 
+# RTL sources in compile order (packages first). The .sby files keep their own copies.
+RTL=(rtl/muldiv_pkg.vhd rtl/muldiv.vhd rtl/ncr_core.vhd)
+RTL_ABS=("${RTL[@]/#/$ROOT/}")
+
 prep_dirs() { mkdir -p "$EV" "$WK"; }
 
 # Run a command, tee output to an evidence log, record the exit code.
@@ -46,7 +50,7 @@ cmd_doctor() {
   else echo "MISS ghdl-yosys-plugin"; ok=1; fi
   if [ -f "$TLA_JAR" ]; then echo "ok   tla2tools.jar  $TLA_JAR"; else echo "MISS tla2tools.jar ($TLA_JAR)"; ok=1; fi
   command -v ghdl >/dev/null && ghdl --version | head -1
-  for f in rtl/muldiv.vhd rtl/ncr_core.vhd tb/tb_muldiv.vhd tb/tb_ncr.vhd formal/muldiv.sby formal/ncr.sby spec/NcrFsm.tla; do
+  for f in "${RTL[@]}" tb/tb_muldiv.vhd tb/tb_ncr.vhd formal/muldiv.sby formal/ncr.sby spec/NcrFsm.tla; do
     [ -f "$ROOT/$f" ] || { echo "MISS $f"; ok=1; }
   done
   return $ok
@@ -57,7 +61,7 @@ cmd_sim() {
   prep_dirs
   cd "$WK"
   record sim-analyze ghdl -a --std=08 --workdir="$WK" \
-    "$ROOT/rtl/muldiv.vhd" "$ROOT/rtl/ncr_core.vhd" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd"
+    "${RTL_ABS[@]}" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd"
   for tb in tb_muldiv tb_ncr; do
     record "sim-elab-$tb" ghdl -e --std=08 --workdir="$WK" "$tb" || { rc=1; continue; }
     local gen=(); [ "$tb" = tb_ncr ] && gen=(-gN_MAX="$nmax")
@@ -72,7 +76,7 @@ cmd_ncr() {
   [ $# -eq 2 ] || { echo "usage: scripts/verify.sh ncr N R"; return 2; }
   mkdir -p "$WK"
   cd "$WK"
-  ghdl -a --std=08 --workdir="$WK" "$ROOT/rtl/muldiv.vhd" "$ROOT/rtl/ncr_core.vhd" "$ROOT/tb/ncr_run.vhd"
+  ghdl -a --std=08 --workdir="$WK" "${RTL_ABS[@]}" "$ROOT/tb/ncr_run.vhd"
   ghdl -e --std=08 --workdir="$WK" ncr_run
   ghdl -r --std=08 --workdir="$WK" ncr_run -gN="$1" -gR="$2" 2>&1 | sed 's/^.*(report note): //'
 }
@@ -110,7 +114,7 @@ cmd_tla() {
 cmd_synth() {
   prep_dirs
   cd "$WK"
-  record synth yosys -m ghdl -p "ghdl --std=08 $ROOT/rtl/muldiv.vhd $ROOT/rtl/ncr_core.vhd -e ncr_core; synth -top ncr_core; stat"
+  record synth yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} -e ncr_core; synth -top ncr_core; stat"
 }
 
 cmd_all() {
