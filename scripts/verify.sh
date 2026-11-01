@@ -6,6 +6,7 @@
 #   scripts/verify.sh formal [muldiv|ncr|equiv] [task]
 #   scripts/verify.sh tla
 #   scripts/verify.sh synth
+#   scripts/verify.sh board-synth    # Nexys A7 top mapped to Artix-7 cells (synth_xilinx)
 #   scripts/verify.sh schematic        # RTL schematics as SVG (needs netlistsvg)
 #   scripts/verify.sh all
 #   scripts/verify.sh clean [RUN_ID]
@@ -26,6 +27,9 @@ export PATH="$OCS/bin:$PATH"
 # RTL sources in compile order (packages first). The .sby files keep their own copies.
 RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_core.vhd)
 RTL_ABS=("${RTL[@]/#/$ROOT/}")
+# Nexys A7 calculator around ncr_core (pins in board/nexys_a7.xdc).
+BOARD=(board/uart_tx.vhd board/bin2bcd.vhd board/btn_pulse.vhd board/ncr_report.vhd board/nexys_a7_top.vhd)
+BOARD_ABS=("${BOARD[@]/#/$ROOT/}")
 
 prep_dirs() { mkdir -p "$EV" "$WK"; }
 
@@ -52,7 +56,7 @@ cmd_doctor() {
   else echo "MISS ghdl-yosys-plugin"; ok=1; fi
   if [ -f "$TLA_JAR" ]; then echo "ok   tla2tools.jar  $TLA_JAR"; else echo "MISS tla2tools.jar ($TLA_JAR)"; ok=1; fi
   command -v ghdl >/dev/null && ghdl --version | head -1
-  for f in "${RTL[@]}" tb/tb_muldiv.vhd tb/tb_ncr.vhd formal/muldiv.sby formal/ncr.sby spec/NcrFsm.tla; do
+  for f in "${RTL[@]}" "${BOARD[@]}" board/nexys_a7.xdc tb/tb_muldiv.vhd tb/tb_ncr.vhd tb/tb_board.vhd formal/muldiv.sby formal/ncr.sby spec/NcrFsm.tla; do
     [ -f "$ROOT/$f" ] || { echo "MISS $f"; ok=1; }
   done
   return $ok
@@ -64,8 +68,8 @@ cmd_sim() {
   cd "$WK"
   record sim-analyze ghdl -a --std=08 --workdir="$WK" \
     "${RTL_ABS[@]}" "$ROOT/formal/ref/muldiv_ref.vhd" "$ROOT/formal/ref/ncr_core_ref.vhd" \
-    "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd"
-  for tb in tb_muldiv tb_ncr tb_equiv; do
+    "${BOARD_ABS[@]}" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd" "$ROOT/tb/tb_board.vhd"
+  for tb in tb_muldiv tb_ncr tb_equiv tb_board; do
     record "sim-elab-$tb" ghdl -e --std=08 --workdir="$WK" "$tb" || { rc=1; continue; }
     local gen=(); [ "$tb" = tb_ncr ] && gen=(-gN_MAX="$nmax")
     record "sim-run-$tb" ghdl -r --std=08 --workdir="$WK" "$tb" "${gen[@]}" \
@@ -121,6 +125,12 @@ cmd_synth() {
   record synth yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} -e ncr_core; synth -top ncr_core; stat"
 }
 
+cmd_board_synth() {
+  prep_dirs
+  cd "$WK"
+  record board-synth yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e nexys_a7_top; synth_xilinx -top nexys_a7_top -flatten; stat"
+}
+
 # One SVG per entity, hierarchy kept: structural tops show their sub-units as boxes.
 cmd_schematic() {
   prep_dirs
@@ -143,6 +153,7 @@ cmd_all() {
   cmd_formal || rc=1
   cmd_tla || rc=1
   cmd_synth || rc=1
+  cmd_board_synth || rc=1
   echo "evidence: $EV"
   return $rc
 }
@@ -162,8 +173,9 @@ case "${1:-}" in
   formal) shift; cmd_formal "$@" ;;
   tla)    shift; cmd_tla "$@" ;;
   synth)  shift; cmd_synth "$@" ;;
+  board-synth) shift; cmd_board_synth "$@" ;;
   schematic) shift; cmd_schematic "$@" ;;
   all)    shift; cmd_all "$@" ;;
   clean)  shift; cmd_clean "$@" ;;
-  *) sed -n '2,12p' "$0"; exit 2 ;;
+  *) sed -n '2,13p' "$0"; exit 2 ;;
 esac
