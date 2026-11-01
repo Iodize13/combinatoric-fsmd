@@ -127,7 +127,7 @@ cmd_schematic() {
   mkdir -p "$EV/schematic"
   cd "$WK"
   local rc=0 m
-  for m in alu muldiv_dp muldiv_ctrl muldiv ncr_dp ncr_ctrl ncr_core; do
+  for m in alu reg_en sr_flag down_counter up_counter cmp_gt mux2 res_reg prodrem_reg muldiv_status muldiv_next muldiv_state_reg ncr_next ncr_state_reg muldiv_dp muldiv_ctrl muldiv ncr_dp ncr_ctrl ncr_core; do
     record "schematic-$m" yosys -m ghdl -p \
       "ghdl --std=08 ${RTL_ABS[*]} -e $m; prep -top $m; opt_clean -purge; write_json $WK/$m.json" || { rc=1; continue; }
     "$NETLISTSVG" "$WK/$m.json" -o "$EV/schematic/$m.svg" || rc=1
