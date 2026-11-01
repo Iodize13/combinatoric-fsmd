@@ -1,0 +1,61 @@
+# Cycle-exact equivalence of the RTL against the frozen reference in formal/ref/.
+# muldiv_prove / ncr_prove: unbounded (PDR) at small W. *_bmc: bounded at a larger W.
+# When RTL files are added, list them in [files] and in each ghdl line below (compile order).
+[tasks]
+muldiv_prove
+muldiv_bmc
+ncr_prove
+ncr_bmc
+
+[options]
+muldiv_prove: mode prove
+ncr_prove: mode prove
+muldiv_bmc: mode bmc
+muldiv_bmc: depth 40
+ncr_bmc: mode bmc
+ncr_bmc: depth 60
+
+[engines]
+muldiv_prove: abc pdr
+ncr_prove: abc pdr
+muldiv_bmc: smtbmc yices
+ncr_bmc: smtbmc yices
+
+[script]
+plugin -i ghdl
+muldiv_prove: ghdl --std=08 -gW=4 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
+muldiv_bmc: ghdl --std=08 -gW=8 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
+ncr_prove: ghdl --std=08 -gW=3 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd up_counter.vhd cmp_gt.vhd mux2.vhd res_reg.vhd ncr_dp.vhd ncr_next.vhd ncr_state_reg.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
+ncr_bmc: ghdl --std=08 -gW=5 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd up_counter.vhd cmp_gt.vhd mux2.vhd res_reg.vhd ncr_dp.vhd ncr_next.vhd ncr_state_reg.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
+muldiv_prove: prep -top equiv_muldiv
+muldiv_bmc: prep -top equiv_muldiv
+ncr_prove: prep -top equiv_ncr
+ncr_bmc: prep -top equiv_ncr
+
+[files]
+../rtl/muldiv_pkg.vhd
+../rtl/alu.vhd
+../rtl/reg_en.vhd
+../rtl/sr_flag.vhd
+../rtl/down_counter.vhd
+../rtl/prodrem_reg.vhd
+../rtl/muldiv_status.vhd
+../rtl/muldiv_dp.vhd
+../rtl/muldiv_next.vhd
+../rtl/muldiv_state_reg.vhd
+../rtl/muldiv_ctrl.vhd
+../rtl/muldiv.vhd
+../rtl/ncr_pkg.vhd
+../rtl/up_counter.vhd
+../rtl/cmp_gt.vhd
+../rtl/mux2.vhd
+../rtl/res_reg.vhd
+../rtl/ncr_dp.vhd
+../rtl/ncr_next.vhd
+../rtl/ncr_state_reg.vhd
+../rtl/ncr_ctrl.vhd
+../rtl/ncr_core.vhd
+ref/muldiv_ref.vhd
+ref/ncr_core_ref.vhd
+equiv_muldiv.vhd
+equiv_ncr.vhd

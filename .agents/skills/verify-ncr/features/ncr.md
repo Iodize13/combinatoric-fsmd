@@ -12,7 +12,7 @@ The user pulses `start` with `n` and `r`. Once `done` pulses, `result` holds C(n
 
 ## How to get to it (user POV)
 
-- Ports of `entity ncr_core` in `rtl/ncr_core.vhd`.
+- Ports of `entity ncr_core` in `rtl/ncr_core.vhd` (a structural top over `ncr_ctrl` and `ncr_dp`).
 - One-shot runner `tb/ncr_run.vhd`, through `scripts/verify.sh ncr N R`.
 
 ## Driving it with scripts/verify.sh
