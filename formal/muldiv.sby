@@ -8,9 +8,9 @@ cover
 [options]
 prove: mode prove
 bmc: mode bmc
-bmc: depth 18
+bmc: depth 28
 cover: mode cover
-cover: depth 24
+cover: depth 44
 
 [engines]
 prove: abc pdr
