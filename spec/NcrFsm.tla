@@ -54,17 +54,19 @@ Mul ==
   /\ state' = "DIV"
   /\ UNCHANGED <<n, r, nmr, k, i, res, ovf>>
 
-\* DIVHL refuses when HI >= i (quotient would not fit): ovf is set, HI:LO is
-\* left as it was and res takes LO of the undivided product.
+\* DIVHL refuses when HI >= i (quotient would not fit): ovf is set, res
+\* saturates to all ones, and the loop stops.
 Div ==
   /\ state = "DIV"
   /\ IF prod \div (2 ^ Width) >= i
        THEN /\ ovf' = TRUE
-            /\ res' = prod % (2 ^ Width)
+            /\ res' = MaxResult
+            /\ state' = "FIN"
+            /\ UNCHANGED i
        ELSE /\ ovf' = ovf
             /\ res' = prod \div i
-  /\ i' = i + 1
-  /\ state' = "CHECK"
+            /\ i' = i + 1
+            /\ state' = "CHECK"
   /\ UNCHANGED <<n, r, nmr, k, prod>>
 
 Fin ==

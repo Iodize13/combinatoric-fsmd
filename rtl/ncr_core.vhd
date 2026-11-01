@@ -3,7 +3,8 @@
 -- One shared muldiv unit: MULTU leaves the 2W-bit product in HI:LO, then
 -- DIVHL divides that HI:LO by i in place, with no copy between them.
 -- Pulse start while busy = '0'; n and r are latched on that cycle.
--- result is valid while done = '1'. ovf = '1' means a quotient did not fit in W bits.
+-- result is valid while done = '1'. If C(n, r) does not fit in W bits, result is all ones
+-- and ovf = '1'; the loop stops at the first quotient that does not fit.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -121,11 +122,14 @@ begin
           when S_DIV_WAIT =>
             if md_done = '1' then
               if md_ovf = '1' then
+                res   <= (others => '1');
                 ovf_r <= '1';
+                state <= S_FIN;
+              else
+                res   <= md_lo;
+                i     <= i + 1;
+                state <= S_CHECK;
               end if;
-              res   <= md_lo;
-              i     <= i + 1;
-              state <= S_CHECK;
             end if;
 
           when S_FIN =>
