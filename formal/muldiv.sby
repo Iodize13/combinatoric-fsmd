@@ -19,9 +19,9 @@ cover: smtbmc yices
 
 [script]
 plugin -i ghdl
-prove: ghdl --std=08 -gW=4 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_props.vhd -e muldiv_props
-bmc: ghdl --std=08 -gW=6 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_props.vhd -e muldiv_props
-cover: ghdl --std=08 -gW=8 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_props.vhd -e muldiv_props
+prove: ghdl --std=08 -gW=4 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_props.vhd -e muldiv_props
+bmc: ghdl --std=08 -gW=6 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_props.vhd -e muldiv_props
+cover: ghdl --std=08 -gW=8 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_props.vhd -e muldiv_props
 prep -top muldiv_props
 
 [files]
@@ -33,6 +33,8 @@ prep -top muldiv_props
 ../rtl/prodrem_reg.vhd
 ../rtl/muldiv_status.vhd
 ../rtl/muldiv_dp.vhd
+../rtl/muldiv_next.vhd
+../rtl/muldiv_state_reg.vhd
 ../rtl/muldiv_ctrl.vhd
 ../rtl/muldiv.vhd
 muldiv_props.vhd

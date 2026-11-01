@@ -33,6 +33,8 @@ package muldiv_pkg is
 
   constant CTRL_NOP : muldiv_ctrl_t := (R_HOLD, '0', '0', '0', '0', '0', '0', '0');
 
+  type phase_t is (P_IDLE, P_MUL, P_DIV_SHIFT0, P_DIV_SUB, P_DIV_TEST, P_DIV_FIX);
+
   type muldiv_status_t is record
     rem_lsb  : std_logic;  -- Product0
     rem_sign : std_logic;  -- top bit of the left half
