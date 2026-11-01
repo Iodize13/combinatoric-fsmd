@@ -14,10 +14,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package muldiv_pkg is
-  subtype muldiv_op_t is std_logic_vector(1 downto 0);
-  constant OP_MULTU : muldiv_op_t := "00";
-  constant OP_DIVU  : muldiv_op_t := "01";
-  constant OP_DIVHL : muldiv_op_t := "10";
+  type muldiv_op_t is (OP_MULTU, OP_DIVU, OP_DIVHL);
 end package;
 
 library ieee;
@@ -79,32 +76,29 @@ begin
           dz_r  <= '0';
           ovf_r <= '0';
           m     <= b;
-          case op is
-            when OP_MULTU =>
-              is_div <= '0';
-              hi_r   <= (others => '0');
-              lo_r   <= a;
-              cnt    <= W;
-              run    <= '1';
-            when OP_DIVU | OP_DIVHL =>
-              is_div <= '1';
-              if op = OP_DIVU then
-                hi_r <= (others => '0');
-                lo_r <= a;
-              end if;
-              if b = 0 then
-                dz_r <= '1';
-                done <= '1';
-              elsif op = OP_DIVHL and hi_r >= b then
-                ovf_r <= '1';
-                done  <= '1';
-              else
-                cnt <= W;
-                run <= '1';
-              end if;
-            when others =>
+          if op = OP_MULTU then
+            is_div <= '0';
+            hi_r   <= (others => '0');
+            lo_r   <= a;
+            cnt    <= W;
+            run    <= '1';
+          else
+            is_div <= '1';
+            if op /= OP_DIVHL then
+              hi_r <= (others => '0');
+              lo_r <= a;
+            end if;
+            if b = 0 then
+              dz_r <= '1';
               done <= '1';
-          end case;
+            elsif op = OP_DIVHL and hi_r >= b then
+              ovf_r <= '1';
+              done  <= '1';
+            else
+              cnt <= W;
+              run <= '1';
+            end if;
+          end if;
         end if;
       else
         if is_div = '0' then

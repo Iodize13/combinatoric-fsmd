@@ -55,7 +55,6 @@ begin
   default clock is rising_edge(clk);
 
   assume_reset_first : assume rst = '1';
-  assume_legal_op    : assume always (op /= "11");
 
   -- Checks are gated on rst = '0': DUT registers are undefined in the reset cycle.
   assert_mul : assert always
