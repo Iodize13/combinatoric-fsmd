@@ -3,7 +3,7 @@
 #   scripts/verify.sh doctor
 #   scripts/verify.sh sim [N_MAX]
 #   scripts/verify.sh ncr N R
-#   scripts/verify.sh formal [muldiv|ncr|equiv] [task]
+#   scripts/verify.sh formal [muldiv|ncr|equiv|cpu] [task]
 #   scripts/verify.sh tla
 #   scripts/verify.sh synth
 #   scripts/verify.sh schematic        # RTL schematics as SVG (needs netlistsvg)
@@ -52,7 +52,7 @@ cmd_doctor() {
   else echo "MISS ghdl-yosys-plugin"; ok=1; fi
   if [ -f "$TLA_JAR" ]; then echo "ok   tla2tools.jar  $TLA_JAR"; else echo "MISS tla2tools.jar ($TLA_JAR)"; ok=1; fi
   command -v ghdl >/dev/null && ghdl --version | head -1
-  for f in "${RTL[@]}" tb/tb_muldiv.vhd tb/tb_ncr.vhd tb/tb_cpu.vhd formal/muldiv.sby formal/ncr.sby spec/NcrFsm.tla; do
+  for f in "${RTL[@]}" tb/tb_muldiv.vhd tb/tb_ncr.vhd tb/tb_cpu.vhd formal/muldiv.sby formal/ncr.sby formal/cpu.sby spec/NcrFsm.tla; do
     [ -f "$ROOT/$f" ] || { echo "MISS $f"; ok=1; }
   done
   return $ok
@@ -88,13 +88,14 @@ cmd_formal() {
   local design=${1:-all} task=${2:-}
   prep_dirs
   cd "$ROOT/formal"
-  local designs=(muldiv ncr equiv); [ "$design" = all ] || designs=("$design")
+  local designs=(muldiv ncr equiv cpu); [ "$design" = all ] || designs=("$design")
   local rc=0 d t tasks
   for d in "${designs[@]}"; do
     # muldiv: PDR proof at W=4 plus BMC at W=6; ncr: BMC only.
     if [ -n "$task" ]; then tasks=("$task")
     elif [ "$d" = ncr ]; then tasks=(bmc cover)
     elif [ "$d" = equiv ]; then tasks=(muldiv_prove muldiv_bmc ncr_prove ncr_bmc)
+    elif [ "$d" = cpu ]; then tasks=(prove cover)
     else tasks=(prove bmc cover); fi
     for t in "${tasks[@]}"; do
       local job="formal-$d-$t" out="$WK/sby-$d-$t"
