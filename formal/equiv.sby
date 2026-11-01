@@ -25,8 +25,8 @@ ncr_bmc: smtbmc yices
 plugin -i ghdl
 muldiv_prove: ghdl --std=08 -gW=4 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
 muldiv_bmc: ghdl --std=08 -gW=8 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
-ncr_prove: ghdl --std=08 -gW=3 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
-ncr_bmc: ghdl --std=08 -gW=5 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
+ncr_prove: ghdl --std=08 -gW=3 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd up_counter.vhd cmp_gt.vhd mux2.vhd res_reg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
+ncr_bmc: ghdl --std=08 -gW=5 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd up_counter.vhd cmp_gt.vhd mux2.vhd res_reg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
 muldiv_prove: prep -top equiv_muldiv
 muldiv_bmc: prep -top equiv_muldiv
 ncr_prove: prep -top equiv_ncr
@@ -46,6 +46,10 @@ ncr_bmc: prep -top equiv_ncr
 ../rtl/muldiv_ctrl.vhd
 ../rtl/muldiv.vhd
 ../rtl/ncr_pkg.vhd
+../rtl/up_counter.vhd
+../rtl/cmp_gt.vhd
+../rtl/mux2.vhd
+../rtl/res_reg.vhd
 ../rtl/ncr_dp.vhd
 ../rtl/ncr_ctrl.vhd
 ../rtl/ncr_core.vhd

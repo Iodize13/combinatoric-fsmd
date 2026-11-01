@@ -6,14 +6,14 @@ use work.muldiv_pkg.all;
 
 package ncr_pkg is
   type res_op_t is (RES_HOLD, RES_ONE, RES_ZERO, RES_SATURATE, RES_LOAD_LO);
-  type i_op_t   is (I_HOLD, I_ONE, I_INC);
 
   type ncr_ctrl_t is record
     latch_nr  : std_logic;    -- n_l, r_l <= n, r
     init_k    : std_logic;    -- k_r, n_minus_k <= min(r, n-r), n - min(r, n-r)
     k_swap    : std_logic;    -- with init_k: k = n_l - r_l instead of r_l
     res_op    : res_op_t;
-    i_op      : i_op_t;
+    i_load    : std_logic;    -- i <= 1
+    i_inc     : std_logic;    -- i <= i + 1
     ovf_clear : std_logic;
     ovf_set   : std_logic;
     md_start  : std_logic;
@@ -22,7 +22,7 @@ package ncr_pkg is
   end record;
 
   constant NCR_CTRL_NOP : ncr_ctrl_t :=
-    ('0', '0', '0', RES_HOLD, I_HOLD, '0', '0', '0', OP_DIVHL, '0');
+    ('0', '0', '0', RES_HOLD, '0', '0', '0', '0', '0', OP_DIVHL, '0');
 
   type ncr_status_t is record
     r_gt_n         : std_logic;

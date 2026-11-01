@@ -13,7 +13,7 @@ smtbmc yices
 
 [script]
 plugin -i ghdl
-ghdl --std=08 -gW=5 -gN_MAX=7 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd ncr_props.vhd -e ncr_props
+ghdl --std=08 -gW=5 -gN_MAX=7 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_next.vhd muldiv_state_reg.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd up_counter.vhd cmp_gt.vhd mux2.vhd res_reg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd ncr_props.vhd -e ncr_props
 prep -top ncr_props
 
 [files]
@@ -30,6 +30,10 @@ prep -top ncr_props
 ../rtl/muldiv_ctrl.vhd
 ../rtl/muldiv.vhd
 ../rtl/ncr_pkg.vhd
+../rtl/up_counter.vhd
+../rtl/cmp_gt.vhd
+../rtl/mux2.vhd
+../rtl/res_reg.vhd
 ../rtl/ncr_dp.vhd
 ../rtl/ncr_ctrl.vhd
 ../rtl/ncr_core.vhd

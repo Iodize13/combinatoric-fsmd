@@ -45,7 +45,7 @@ begin
           ctrl.init_k <= '1';
           ctrl.k_swap <= status.r_gt_n_minus_r;
           ctrl.res_op <= RES_ONE;
-          ctrl.i_op   <= I_ONE;
+          ctrl.i_load <= '1';
           next_state  <= S_CHECK;
         end if;
 
@@ -79,7 +79,7 @@ begin
             next_state   <= S_FIN;
           else
             ctrl.res_op <= RES_LOAD_LO;
-            ctrl.i_op   <= I_INC;
+            ctrl.i_inc  <= '1';
             next_state  <= S_CHECK;
           end if;
         end if;
