@@ -6,23 +6,23 @@
 
 - `LoopInv`: in CHECK, res = C(nmr + i - 1, i - 1).
 - `ExactDivision`: in DIV, prod % i = 0, which shows that integer division is exact and no floating point is needed.
-- `NoQuotOverflow`: in DIV, prod div 2^Width < i, which is the DIVHL precondition.
-- `FinCorrect`: in FIN, res = C(n, r).
+- `StopOnOvf`: once ovf is set, no further MUL or DIV happens.
+- `FinCorrect`: in FIN, res = C(n, r) with ovf false when C(n, r) fits in Width bits, and otherwise res = 2^Width - 1 with ovf true.
 - `Terminates`: INIT leads to FIN (liveness, under weak fairness).
 
 ## How to get to it (user POV)
 
-- `spec/NcrFsm.tla` and `spec/NcrFsm.cfg` (MaxN = 8, Width = 16).
+- `spec/NcrFsm.tla` and `spec/NcrFsm.cfg` (MaxN = 8, Width = 6, so overflow is reachable).
 
 ## Driving it with scripts/verify.sh
 
 Preconditions: baseline from README.
 
-- **Model-check.** Run `scripts/verify.sh tla`. `evidence/$RUN_ID/tla-tlc.log` must contain `No error has been found`. Record the `distinct states found` line (47,808 on 2026-11-01).
+- **Model-check.** Run `scripts/verify.sh tla`. `evidence/$RUN_ID/tla-tlc.log` must contain `No error has been found`. Record the `distinct states found` line (47,807 on 2026-11-02).
 - **Regression proof.** Changing `nmr' = n - Min(r, n - r)` to `nmr' = n - r` must make TLC report `Invariant FinCorrect is violated`. This was observed on 2026-11-01.
 
 ## Gotchas
 
 - The model is hand-kept in sync with `rtl/ncr_core.vhd`. A change to the FSM in VHDL that is not mirrored here makes this proof about a different machine.
-- TLC integers are 32-bit signed, so `Width = 32` aborts with `Overflow when computing 2^32`. Width = 16 is ample for MaxN = 8.
+- TLC integers are 32-bit signed, so `Width = 32` aborts with `Overflow when computing 2^32`. Keep Width small enough that C(MaxN, MaxN/2) exceeds 2^Width - 1, or the overflow branch is never explored.
 - Raising MaxN past ~12 makes Fact() slow. Prefer small MaxN, because sim covers range.

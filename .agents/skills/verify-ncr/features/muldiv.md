@@ -1,6 +1,6 @@
 # muldiv: shared multiply/divide unit
 
-One W-bit ALU and one 2W-bit HI:LO register serve both unsigned multiply and divide, following "approach 2" from `slides/w03c_mult.pdf`. A user pulses `start` with `op`, `a`, and `b` while `busy = '0'`. `done` pulses W+1 cycles later, or 1 cycle later on `dz` or `ovf`.
+One W+1-bit ALU and one 2W+1-bit register (HI:LO plus a carry bit) serve both unsigned multiply and divide, following "approach 2" from `slides/w03c_mult.pdf`. A user pulses `start` with `op`, `a`, and `b` while `busy = '0'`. `done` pulses W+1 cycles after a MULTU start, 2W+3 cycles after a divide start, or 1 cycle later on `dz` or `ovf`.
 
 ## Sub-features
 
@@ -22,7 +22,7 @@ Preconditions: baseline from README.
 
 - **Simulate at W=32.** Run `scripts/verify.sh sim`. `evidence/$RUN_ID/sim-run-tb_muldiv.log` must contain `TB PASS 8363` (121 edge pairs × 3 + 2000 random × 4). Any mismatch is logged with the hex operands.
 - **Unbounded proof at W=4.** Run `scripts/verify.sh formal muldiv prove`. `formal-muldiv-prove.status` must read `DONE (PASS, rc=0)`. This covers every reachable sequence of ops, for all time, at W=4.
-- **Bounded check at W=6.** Run `scripts/verify.sh formal muldiv bmc`. The result must be `DONE (PASS, rc=0)`, which means no failure in the first 18 cycles (2 back-to-back ops).
+- **Bounded check at W=6.** Run `scripts/verify.sh formal muldiv bmc`. The result must be `DONE (PASS, rc=0)`, which means no failure in the first 28 cycles (a MULTU followed by a divide).
 - **Reachability.** Run `scripts/verify.sh formal muldiv cover`. The result must be PASS, and the `formal-muldiv-cover-traces/` directory must hold VCDs for `cover_mul_max` and `cover_divhl`.
 
 ## Gotchas
