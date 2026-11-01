@@ -24,7 +24,7 @@ WK="$ROOT/build/$RUN_ID"
 export PATH="$OCS/bin:$PATH"
 
 # RTL sources in compile order (packages first). The .sby files keep their own copies.
-RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_ctrl.vhd rtl/ncr_core.vhd)
+RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_core.vhd)
 RTL_ABS=("${RTL[@]/#/$ROOT/}")
 
 prep_dirs() { mkdir -p "$EV" "$WK"; }

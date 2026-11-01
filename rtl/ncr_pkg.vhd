@@ -7,6 +7,9 @@ use work.muldiv_pkg.all;
 package ncr_pkg is
   type res_op_t is (RES_HOLD, RES_ONE, RES_ZERO, RES_SATURATE, RES_LOAD_LO);
 
+  type state_t is (S_IDLE, S_INIT, S_CHECK, S_MUL_START, S_MUL_WAIT,
+                   S_DIV_START, S_DIV_WAIT, S_FIN);
+
   type ncr_ctrl_t is record
     latch_nr  : std_logic;    -- n_l, r_l <= n, r
     init_k    : std_logic;    -- k_r, n_minus_k <= min(r, n-r), n - min(r, n-r)
