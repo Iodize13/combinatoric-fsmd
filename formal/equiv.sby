@@ -23,10 +23,10 @@ ncr_bmc: smtbmc yices
 
 [script]
 plugin -i ghdl
-muldiv_prove: ghdl --std=08 -gW=4 muldiv_pkg.vhd alu.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
-muldiv_bmc: ghdl --std=08 -gW=8 muldiv_pkg.vhd alu.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
-ncr_prove: ghdl --std=08 -gW=3 muldiv_pkg.vhd alu.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
-ncr_bmc: ghdl --std=08 -gW=5 muldiv_pkg.vhd alu.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
+muldiv_prove: ghdl --std=08 -gW=4 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
+muldiv_bmc: ghdl --std=08 -gW=8 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd muldiv_ref.vhd equiv_muldiv.vhd -e equiv_muldiv
+ncr_prove: ghdl --std=08 -gW=3 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
+ncr_bmc: ghdl --std=08 -gW=5 muldiv_pkg.vhd alu.vhd reg_en.vhd sr_flag.vhd down_counter.vhd prodrem_reg.vhd muldiv_status.vhd muldiv_dp.vhd muldiv_ctrl.vhd muldiv.vhd ncr_pkg.vhd ncr_dp.vhd ncr_ctrl.vhd ncr_core.vhd muldiv_ref.vhd ncr_core_ref.vhd equiv_ncr.vhd -e equiv_ncr
 muldiv_prove: prep -top equiv_muldiv
 muldiv_bmc: prep -top equiv_muldiv
 ncr_prove: prep -top equiv_ncr
@@ -35,6 +35,11 @@ ncr_bmc: prep -top equiv_ncr
 [files]
 ../rtl/muldiv_pkg.vhd
 ../rtl/alu.vhd
+../rtl/reg_en.vhd
+../rtl/sr_flag.vhd
+../rtl/down_counter.vhd
+../rtl/prodrem_reg.vhd
+../rtl/muldiv_status.vhd
 ../rtl/muldiv_dp.vhd
 ../rtl/muldiv_ctrl.vhd
 ../rtl/muldiv.vhd
