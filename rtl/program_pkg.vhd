@@ -64,7 +64,12 @@ package program_pkg is
      53 => x"21290001",  -- addi $t1, $t1, 1
      54 => x"08000032",  -- j    loop
      55 => x"AC0A0040",  -- sw   $t2, 64($zero)
-     56 => x"08000038",  -- j    halt
+     56 => x"20040015",  -- addi $a0, $zero, 21
+     57 => x"0C00003C",  -- jal  double
+     58 => x"AC020048",  -- sw   $v0, 72($zero)
+     59 => x"0800003B",  -- j    halt
+     60 => x"00841020",  -- add $v0, $a0, $a0
+     61 => x"03E00008",  -- jr   $ra
     others => (others => '0')
   );
 end package;

@@ -56,6 +56,7 @@ begin
           when FN_AND  => ctrl.reg_we <= '1'; ctrl.alu_op <= A_AND;
           when FN_OR   => ctrl.reg_we <= '1'; ctrl.alu_op <= A_OR;
           when FN_SLT  => ctrl.reg_we <= '1'; ctrl.alu_op <= A_SLT;
+          when FN_JR   => ctrl.jump_reg <= '1';
           when FN_MFHI => ctrl.reg_we <= '1'; ctrl.wb_sel <= WB_HI;
           when FN_MFLO => ctrl.reg_we <= '1'; ctrl.wb_sel <= WB_LO;
           when FN_MULTU =>
@@ -95,6 +96,12 @@ begin
 
       when OPC_J =>
         ctrl.jump <= '1';
+
+      when OPC_JAL =>
+        ctrl.jump   <= '1';
+        ctrl.link   <= '1';
+        ctrl.reg_we <= '1';
+        ctrl.wb_sel <= WB_LINK;
 
       when others => null;
     end case;

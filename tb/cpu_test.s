@@ -61,4 +61,10 @@ loop: beq  $t1, $t3, done
       addi $t1, $t1, 1
       j    loop
 done: sw   $t2, 64($zero)
+# jal / jr: a subroutine doubles $a0 into $v0 and returns through $ra
+      addi $a0, $zero, 21
+      jal  double
+      sw   $v0, 72($zero)
 halt: j    halt
+double: add $v0, $a0, $a0
+      jr   $ra

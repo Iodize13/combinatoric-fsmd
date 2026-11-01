@@ -35,8 +35,9 @@ architecture sim of tb_cpu is
     (52, x"FFFFFFFF"),    -- C(67, 33) saturates
     (56, x"00000000"),    -- C(33, 67)
     (60, x"8B18014C"),    -- C(34, 17)
-    (64, x"00000400"));   -- sum of C(10, k)
-  constant HALT_PC : word_t := to_unsigned(56 * 4, 32);
+    (64, x"00000400"),    -- sum of C(10, k)
+    (72, x"0000002A"));   -- jal / jr round trip
+  constant HALT_PC : word_t := to_unsigned(59 * 4, 32);
 
   signal clk       : std_logic := '0';
   signal rst       : std_logic := '1';
