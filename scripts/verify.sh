@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Verification driver for the nCr FSMD.
+# Verification driver for the nCr FSMD and the single-cycle CPU around it.
 #   scripts/verify.sh doctor
 #   scripts/verify.sh sim [N_MAX]
 #   scripts/verify.sh ncr N R
@@ -24,7 +24,7 @@ WK="$ROOT/build/$RUN_ID"
 export PATH="$OCS/bin:$PATH"
 
 # RTL sources in compile order (packages first). The .sby files keep their own copies.
-RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_engine.vhd rtl/ncr_core.vhd)
+RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_engine.vhd rtl/ncr_core.vhd rtl/cpu_pkg.vhd rtl/program_pkg.vhd rtl/cpu_alu.vhd rtl/regfile.vhd rtl/imem.vhd rtl/dmem.vhd rtl/wb_mux.vhd rtl/md_mux.vhd rtl/cpu_decode.vhd rtl/cpu_ctrl.vhd rtl/cpu_dp.vhd rtl/cpu.vhd)
 RTL_ABS=("${RTL[@]/#/$ROOT/}")
 
 prep_dirs() { mkdir -p "$EV" "$WK"; }
@@ -52,7 +52,7 @@ cmd_doctor() {
   else echo "MISS ghdl-yosys-plugin"; ok=1; fi
   if [ -f "$TLA_JAR" ]; then echo "ok   tla2tools.jar  $TLA_JAR"; else echo "MISS tla2tools.jar ($TLA_JAR)"; ok=1; fi
   command -v ghdl >/dev/null && ghdl --version | head -1
-  for f in "${RTL[@]}" tb/tb_muldiv.vhd tb/tb_ncr.vhd formal/muldiv.sby formal/ncr.sby spec/NcrFsm.tla; do
+  for f in "${RTL[@]}" tb/tb_muldiv.vhd tb/tb_ncr.vhd tb/tb_cpu.vhd formal/muldiv.sby formal/ncr.sby spec/NcrFsm.tla; do
     [ -f "$ROOT/$f" ] || { echo "MISS $f"; ok=1; }
   done
   return $ok
@@ -64,8 +64,8 @@ cmd_sim() {
   cd "$WK"
   record sim-analyze ghdl -a --std=08 --workdir="$WK" \
     "${RTL_ABS[@]}" "$ROOT/formal/ref/muldiv_ref.vhd" "$ROOT/formal/ref/ncr_core_ref.vhd" \
-    "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd"
-  for tb in tb_muldiv tb_ncr tb_equiv; do
+    "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd" "$ROOT/tb/tb_cpu.vhd"
+  for tb in tb_muldiv tb_ncr tb_equiv tb_cpu; do
     record "sim-elab-$tb" ghdl -e --std=08 --workdir="$WK" "$tb" || { rc=1; continue; }
     local gen=(); [ "$tb" = tb_ncr ] && gen=(-gN_MAX="$nmax")
     record "sim-run-$tb" ghdl -r --std=08 --workdir="$WK" "$tb" "${gen[@]}" \
@@ -118,7 +118,11 @@ cmd_tla() {
 cmd_synth() {
   prep_dirs
   cd "$WK"
-  record synth yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} -e ncr_core; synth -top ncr_core; stat"
+  local rc=0 top
+  for top in ncr_core cpu; do
+    record "synth-$top" yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} -e $top; synth -top $top; stat" || rc=1
+  done
+  return $rc
 }
 
 # One SVG per entity, hierarchy kept: structural tops show their sub-units as boxes.
@@ -127,7 +131,7 @@ cmd_schematic() {
   mkdir -p "$EV/schematic"
   cd "$WK"
   local rc=0 m
-  for m in alu reg_en sr_flag down_counter up_counter cmp_gt mux2 res_reg prodrem_reg muldiv_status muldiv_next muldiv_state_reg ncr_next ncr_state_reg muldiv_dp muldiv_ctrl muldiv ncr_dp ncr_ctrl ncr_core; do
+  for m in alu reg_en sr_flag down_counter up_counter cmp_gt mux2 res_reg prodrem_reg muldiv_status muldiv_next muldiv_state_reg ncr_next ncr_state_reg cpu_alu regfile imem dmem wb_mux md_mux cpu_decode muldiv_dp muldiv_ctrl muldiv ncr_dp ncr_ctrl ncr_engine ncr_core cpu_ctrl cpu_dp cpu; do
     record "schematic-$m" yosys -m ghdl -p \
       "ghdl --std=08 ${RTL_ABS[*]} -e $m; prep -top $m; opt_clean -purge; write_json $WK/$m.json" || { rc=1; continue; }
     "$NETLISTSVG" "$WK/$m.json" -o "$EV/schematic/$m.svg" || rc=1

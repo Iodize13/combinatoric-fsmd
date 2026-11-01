@@ -1,13 +1,13 @@
 ---
 name: verify-ncr
-description: Verify the VHDL nCr FSMD and its shared 32-bit multiply/divide unit (rtl/muldiv*.vhd, rtl/ncr_*.vhd) with GHDL simulation, SymbiYosys + PSL formal checks, a TLA+ control model, and a Yosys synth check. Use after any change under rtl/, tb/, formal/, or spec/, or before claiming the hardware computes nCr / MULTU / DIVU / DIVHL correctly.
+description: Verify the VHDL nCr FSMD, its shared 32-bit multiply/divide unit, and the single-cycle CPU with the custom ncr instruction (rtl/muldiv*.vhd, rtl/ncr_*.vhd, rtl/cpu*.vhd) with GHDL simulation, SymbiYosys + PSL formal checks, a TLA+ control model, and a Yosys synth check. Use after any change under rtl/, tb/, formal/, or spec/, or before claiming the hardware computes nCr / MULTU / DIVU / DIVHL correctly, or that a program runs on the CPU.
 ---
 
 # verify-ncr
 
 The "app" is hardware with no UI. A user "drives" it by giving inputs on
-`start`/`op`/`a`/`b` (muldiv) or `start`/`n`/`r` (ncr_core) and reading
-`hi`/`lo`/`result`/`done`/`ovf`/`dz`. Proof means one of these: a testbench that compares
+`start`/`op`/`a`/`b` (muldiv) or `start`/`n`/`r` (ncr_core), or a program in the CPU's ROM, and reading
+`hi`/`lo`/`result`/`done`/`ovf`/`dz` or the CPU's stores. Proof means one of these: a testbench that compares
 against a reference, a solver run that returns PASS, or a TLC run with no error.
 Everything goes through one script: `scripts/verify.sh`.
 
@@ -21,12 +21,18 @@ Everything goes through one script: `scripts/verify.sh`.
 | `rtl/muldiv_pkg.vhd` | `muldiv_op_t`, `rem_op_t`, `phase_t`, and the `muldiv_ctrl_t` / `muldiv_status_t` records |
 | `rtl/reg_en.vhd`, `sr_flag.vhd`, `down_counter.vhd`, `up_counter.vhd`, `cmp_gt.vhd`, `mux2.vhd`, `alu.vhd` | generic leaf entities shared by muldiv and ncr (register with enable, set/clear flag, counters, comparator, 2-input mux, add/sub) |
 | `rtl/prodrem_reg.vhd`, `rtl/muldiv_status.vhd`, `rtl/muldiv_next.vhd`, `rtl/muldiv_state_reg.vhd` | muldiv-specific leaves |
-| `rtl/ncr_core.vhd` | structural top of the nCr FSMD (ports unchanged): `ncr_ctrl` drives `ncr_dp` |
-| `rtl/ncr_dp.vhd`, `rtl/ncr_pkg.vhd` | structural datapath: `reg_en` n/r/k/nmk, `alu` subtract/add, `mux2`, `up_counter` i, `cmp_gt` x3, `res_reg`, `sr_flag` ovf, and the `muldiv` instance; `state_t`, `ncr_ctrl_t` / `ncr_status_t` records |
+| `rtl/ncr_core.vhd` | structural top of the nCr FSMD (ports unchanged): `ncr_engine` with its own `muldiv` |
+| `rtl/ncr_engine.vhd` | `ncr_ctrl` + `ncr_dp`, driving an external muldiv through `md_*` ports (the CPU shares its muldiv this way) |
+| `rtl/ncr_dp.vhd`, `rtl/ncr_pkg.vhd` | structural datapath: `reg_en` n/r/k/nmk, `alu` subtract/add, `mux2`, `up_counter` i, `cmp_gt` x3, `res_reg`, `sr_flag` ovf, and `md_*` ports to the muldiv unit; `state_t`, `ncr_ctrl_t` / `ncr_status_t` records |
 | `rtl/ncr_ctrl.vhd` | structural control unit: `ncr_next` (`res = res*(n-k+i)/i` using MULTU then DIVHL on HI:LO) + `ncr_state_reg` (`state_t` + registered `done`) |
 | `rtl/res_reg.vhd` | nCr result register (hold/one/zero/saturate/load-lo) |
 | `tb/tb_muldiv.vhd` | W=32 edge + random (2000) checks, including MULTU→DIVHL |
+| `rtl/cpu.vhd` | single-cycle MIPS-subset CPU: `cpu_ctrl` drives `cpu_dp`; encodings and the ncr instruction in `rtl/cpu_pkg.vhd` |
+| `rtl/cpu_dp.vhd` | PC (`reg_en`), `imem` ROM, `regfile`, `cpu_alu`, `dmem` RAM, `muldiv` shared with `ncr_engine` via `md_mux`, `wb_mux` |
+| `rtl/cpu_ctrl.vhd` | `cpu_decode` (combinational) + `sr_flag` "issued" for the multu/divu/ncr stall |
+| `rtl/program_pkg.vhd` | ROM contents, hand-assembled from `tb/cpu_test.s` |
 | `tb/tb_ncr.vhd` | W=32 exhaustive n=0..N_MAX, r=0..n+1 against Pascal |
+| `tb/tb_cpu.vhd` | runs `tb/cpu_test.s` and checks every store in order, then the halt loop |
 | `formal/*_props.vhd` | PSL harnesses (assume/assert/cover, VHDL-2008) |
 | `formal/muldiv.sby` | tasks `prove` (PDR, W=4), `bmc` (W=6, depth 28), `cover` (W=8, depth 44) |
 | `formal/ncr.sby` | tasks `bmc` (W=5, N_MAX=7, depth 100), `cover`; overflow is reachable (C(7,3) = 35 > 31) |
@@ -65,7 +71,7 @@ RUN_ID=<tag> scripts/verify.sh sim [N_MAX]                  # both testbenches (
 scripts/verify.sh ncr N R                                   # one C(N,R) at W=32: prints value + cycles, no evidence files
 RUN_ID=<tag> scripts/verify.sh formal [muldiv|ncr] [task]   # default: all designs/tasks
 RUN_ID=<tag> scripts/verify.sh tla
-RUN_ID=<tag> scripts/verify.sh synth                        # yosys synth -top ncr_core; stat
+RUN_ID=<tag> scripts/verify.sh synth                        # yosys synth -top ncr_core and cpu; stat
 RUN_ID=<tag> scripts/verify.sh all                          # doctor, then all of the above
 ```
 
