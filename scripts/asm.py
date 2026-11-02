@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""Assembler for the CPU's MIPS subset (rtl/cpu_pkg.vhd) plus ncr.
+
+Writes rtl/program_pkg.vhd with one ROM constant per source file:
+
+    scripts/asm.py tb/cpu_test.s:TEST_PROGRAM board/calc.s:CALC_PROGRAM
+    scripts/asm.py --check ...    exit 1 if rtl/program_pkg.vhd is stale
+
+Syntax: one instruction per line, '#' comments, 'label:' prefixes, registers as $name or
+$number. Pseudo-instructions: putc 'c' and puts "text" expand to
+'addi $a0, $zero, <char>' + 'jal putc' per character (escapes \\r \\n), so the program
+must define a putc label.
+"""
+import re
+import sys
+
+REGS = {name: i for i, name in enumerate(
+    "zero at v0 v1 a0 a1 a2 a3 t0 t1 t2 t3 t4 t5 t6 t7 "
+    "s0 s1 s2 s3 s4 s5 s6 s7 t8 t9 k0 k1 gp sp fp ra".split())}
+RTYPE = {"add": 0x20, "sub": 0x22, "and": 0x24, "or": 0x25, "slt": 0x2A}
+MEM_WORDS = 256
+OUT = "rtl/program_pkg.vhd"
+
+
+class AsmError(Exception):
+    pass
+
+
+def reg(tok):
+    tok = tok.strip()
+    if not tok.startswith("$"):
+        raise AsmError(f"expected register, got {tok!r}")
+    name = tok[1:]
+    if name.isdigit() and int(name) < 32:
+        return int(name)
+    if name in REGS:
+        return REGS[name]
+    raise AsmError(f"unknown register {tok}")
+
+
+def imm16(value):
+    if not -0x8000 <= value <= 0x7FFF:
+        raise AsmError(f"immediate {value} does not fit in 16 bits")
+    return value & 0xFFFF
+
+
+def chars(text):
+    return text.encode().decode("unicode_escape")
+
+
+def strip_comment(raw):
+    """Drop a '#' comment; inside putc/puts operands a quoted '#' is a character."""
+    if not re.match(r"\s*(\w+:\s*)?put[cs]\b", raw):
+        return raw.split("#", 1)[0].strip()
+    quote = None
+    for i, c in enumerate(raw):
+        if quote:
+            if c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c == "#":
+            return raw[:i].strip()
+    return raw.strip()
+
+
+def expand(src):
+    """Source lines -> [(label list, text, source line)] with pseudo-instructions expanded."""
+    out = []
+    labels = []
+    for lineno, raw in enumerate(src.splitlines(), 1):
+        code = strip_comment(raw)
+        m = re.match(r"(\w+):\s*(.*)", code)
+        if m:
+            labels.append(m.group(1))
+            code = m.group(2)
+        if not code:
+            continue
+        m = re.match(r"putc\s+'(.+)'$", code) or re.match(r'puts\s+"(.*)"$', code)
+        if m:
+            for k, c in enumerate(chars(m.group(1))):
+                out.append((labels if k == 0 else [], f"addi $a0, $zero, {ord(c)}", f"{lineno}: {code}"))
+                out.append(([], "jal putc", ""))
+                labels = []
+            continue
+        out.append((labels, code, f"{lineno}: {code}"))
+        labels = []
+    if labels:
+        raise AsmError(f"label(s) {labels} at end of file")
+    return out
+
+
+def assemble(src):
+    lines = expand(src)
+    addr = {}
+    for pc, (labs, _, _) in enumerate(lines):
+        for lab in labs:
+            if lab in addr:
+                raise AsmError(f"duplicate label {lab}")
+            addr[lab] = pc
+    if len(lines) > MEM_WORDS:
+        raise AsmError(f"{len(lines)} words do not fit in {MEM_WORDS}")
+
+    def target(lab):
+        if lab not in addr:
+            raise AsmError(f"unknown label {lab}")
+        return addr[lab]
+
+    words = []
+    for pc, (_, code, where) in enumerate(lines):
+        op, _, rest = code.partition(" ")
+        a = [x.strip() for x in rest.split(",")] if rest.strip() else []
+        try:
+            if op in RTYPE:
+                w = (reg(a[1]) << 21) | (reg(a[2]) << 16) | (reg(a[0]) << 11) | RTYPE[op]
+            elif op in ("mfhi", "mflo"):
+                w = (reg(a[0]) << 11) | (0x10 if op == "mfhi" else 0x12)
+            elif op in ("multu", "divu"):
+                w = (reg(a[0]) << 21) | (reg(a[1]) << 16) | (0x19 if op == "multu" else 0x1B)
+            elif op == "jr":
+                w = (reg(a[0]) << 21) | 0x08
+            elif op == "ncr":
+                w = (0x1C << 26) | (reg(a[1]) << 21) | (reg(a[2]) << 16) | (reg(a[0]) << 11) | 0x1C
+            elif op == "addi":
+                w = (0x08 << 26) | (reg(a[1]) << 21) | (reg(a[0]) << 16) | imm16(int(a[2], 0))
+            elif op in ("lw", "sw"):
+                m = re.match(r"(-?\w+)\((\$\w+)\)$", a[1])
+                if not m:
+                    raise AsmError(f"bad address {a[1]!r}")
+                w = ((0x23 if op == "lw" else 0x2B) << 26) | (reg(m.group(2)) << 21) | \
+                    (reg(a[0]) << 16) | imm16(int(m.group(1), 0))
+            elif op == "beq":
+                w = (0x04 << 26) | (reg(a[0]) << 21) | (reg(a[1]) << 16) | \
+                    imm16(target(a[2]) - pc - 1)
+            elif op in ("j", "jal"):
+                w = ((0x02 if op == "j" else 0x03) << 26) | target(a[0])
+            else:
+                raise AsmError(f"unknown instruction {op!r}")
+        except (AsmError, IndexError, ValueError) as e:
+            raise AsmError(f"{where or code}: {e}") from None
+        words.append((w, code))
+    return words
+
+
+def vhdl(programs):
+    out = ["-- Instruction ROM contents. GENERATED by scripts/asm.py from the .s files named",
+           "-- below; edit those and rerun it. The assembly is next to each word.",
+           "library ieee;", "use ieee.std_logic_1164.all;", "use ieee.numeric_std.all;",
+           "use work.cpu_pkg.all;", "", "package program_pkg is"]
+    for name, path, words in programs:
+        out.append(f"  -- {path}")
+        out.append(f"  constant {name} : mem_t := (")
+        for pc, (w, code) in enumerate(words):
+            out.append(f'    {pc:3d} => x"{w:08X}",  -- {code}')
+        out.append("    others => (others => '0')")
+        out.append("  );")
+        out.append("")
+    out[-1:] = ["end package;"]
+    return "\n".join(out) + "\n"
+
+
+def main(argv):
+    check = "--check" in argv
+    specs = [a for a in argv if a != "--check"]
+    if not specs:
+        sys.exit(__doc__)
+    programs = []
+    for spec in specs:
+        path, _, name = spec.partition(":")
+        try:
+            programs.append((name, path, assemble(open(path).read())))
+        except AsmError as e:
+            sys.exit(f"{path}:{e}")
+    text = vhdl(programs)
+    if check:
+        if open(OUT).read() != text:
+            sys.exit(f"{OUT} is stale: rerun scripts/asm.py {' '.join(specs)}")
+        print(f"{OUT} up to date")
+        return
+    open(OUT, "w").write(text)
+    for name, path, words in programs:
+        print(f"{name}: {len(words)} / {MEM_WORDS} words from {path}")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

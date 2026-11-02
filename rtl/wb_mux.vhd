@@ -1,4 +1,5 @@
--- Register write-back select: ALU result, loaded word, HI, LO or nCr result.
+-- Register write-back select: ALU result, loaded word, HI, LO, nCr result or the return
+-- address (PC+4, for jal).
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -12,6 +13,7 @@ entity wb_mux is
     hi  : in  word_t;
     lo  : in  word_t;
     ncr : in  word_t;
+    pc4 : in  word_t;
     y   : out word_t
   );
 end entity;
@@ -23,5 +25,6 @@ begin
     mem when WB_MEM,
     hi  when WB_HI,
     lo  when WB_LO,
-    ncr when WB_NCR;
+    ncr when WB_NCR,
+    pc4 when WB_LINK;
 end architecture;

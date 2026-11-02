@@ -1,4 +1,5 @@
--- Nexys A7 nCr calculator end to end: set the switches, press BTNC, decode the UART line
+-- Nexys A7 nCr calculator end to end, on nexys_a7_top (USE_CPU = false: ncr_core and a
+-- hardware text formatter) or nexys_a7_cpu_top (USE_CPU = true: the CPU running calc.s): set the switches, press BTNC, decode the UART line
 -- bit by bit and compare the text. Then debug mode (BTNU): switch changes alone print, and
 -- nothing prints while the switches stay put. Fast UART and debounce generics; real
 -- clock divider.
@@ -8,11 +9,21 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity tb_board is
+  generic (USE_CPU : boolean := false);
 end entity;
 
 architecture sim of tb_board is
   constant CLKS_PER_BIT : positive := 8;
-  constant BIT_TIME     : time := CLKS_PER_BIT * 40 ns;    -- 100 MHz / 4
+  -- each top's default clock divider: 25 MHz for ncr_core, 12.5 MHz for the CPU
+  function default_div_log2 (cpu : boolean) return positive is
+  begin
+    if cpu then
+      return 3;
+    end if;
+    return 2;
+  end function;
+  constant DIV_LOG2     : positive := default_div_log2(USE_CPU);
+  constant BIT_TIME     : time := CLKS_PER_BIT * (10 ns * 2**DIV_LOG2);
 
   type case_t is record
     n, r : natural;
@@ -55,11 +66,19 @@ architecture sim of tb_board is
 begin
   clk <= not clk after 5 ns;
 
-  dut : entity work.nexys_a7_top
-    generic map (CLK_DIV_LOG2 => 2, CLKS_PER_BIT => CLKS_PER_BIT, DEBOUNCE => 4)
-    port map (CLK100MHZ => clk, CPU_RESETN => resetn, BTNC => btnc, BTNU => btnu, SW => sw,
-              LED => led, LED16_G => led16g,
-              UART_RXD_OUT => txd);
+  ncr_board : if not USE_CPU generate
+    dut : entity work.nexys_a7_top
+      generic map (CLK_DIV_LOG2 => DIV_LOG2, CLKS_PER_BIT => CLKS_PER_BIT, DEBOUNCE => 4)
+      port map (CLK100MHZ => clk, CPU_RESETN => resetn, BTNC => btnc, BTNU => btnu, SW => sw,
+                LED => led, LED16_G => led16g, UART_RXD_OUT => txd);
+  end generate;
+
+  cpu_board : if USE_CPU generate
+    dut : entity work.nexys_a7_cpu_top
+      generic map (CLK_DIV_LOG2 => DIV_LOG2, CLKS_PER_BIT => CLKS_PER_BIT, DEBOUNCE => 4)
+      port map (CLK100MHZ => clk, CPU_RESETN => resetn, BTNC => btnc, BTNU => btnu, SW => sw,
+                LED => led, LED16_G => led16g, UART_RXD_OUT => txd);
+  end generate;
 
   -- UART receiver: always listening, publishes each completed line (CR dropped).
   rx : process
@@ -148,7 +167,7 @@ begin
       end if;
     end loop;
     -- settled and already printed: must stay quiet
-    wait on line_evt for 200 us;
+    wait on line_evt for 1 ms;
     if line_evt'event then
       report "debug mode printed without a switch change" severity error;
       failed := failed + 1;
@@ -159,7 +178,7 @@ begin
     btnu <= '0';
     wait for 1 us;
     sw(6 downto 0) <= std_logic_vector(to_unsigned(9, 7));
-    wait on line_evt for 200 us;
+    wait on line_evt for 1 ms;
     if line_evt'event or led16g /= '0' then
       report "still in debug mode after second BTNU" severity error;
       failed := failed + 1;

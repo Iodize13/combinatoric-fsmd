@@ -1,6 +1,6 @@
 -- Types and encodings of the single-cycle MIPS-subset CPU (cpu.vhd).
 --   R-type (opcode 0x00): add sub and or slt mfhi mflo multu divu
---   I-type: addi lw sw beq      J-type: j
+--   R-type jr; I-type: addi lw sw beq; J-type: j jal (jal writes PC+4 to $ra = $31)
 --   ncr rd, rs, rt: opcode SPECIAL2 (0x1C), funct 0x1C. rd <= C(rs, rt), all ones if it
 --   does not fit in 32 bits. It runs on the shared muldiv unit, so it clobbers HI/LO.
 -- add/sub/addi do not trap on overflow (they behave like addu/subu/addiu).
@@ -18,12 +18,14 @@ package cpu_pkg is
 
   constant OPC_RTYPE    : unsigned(5 downto 0) := "000000";
   constant OPC_J        : unsigned(5 downto 0) := "000010";
+  constant OPC_JAL      : unsigned(5 downto 0) := "000011";
   constant OPC_BEQ      : unsigned(5 downto 0) := "000100";
   constant OPC_ADDI     : unsigned(5 downto 0) := "001000";
   constant OPC_SPECIAL2 : unsigned(5 downto 0) := "011100";
   constant OPC_LW       : unsigned(5 downto 0) := "100011";
   constant OPC_SW       : unsigned(5 downto 0) := "101011";
 
+  constant FN_JR    : unsigned(5 downto 0) := "001000";
   constant FN_MFHI  : unsigned(5 downto 0) := "010000";
   constant FN_MFLO  : unsigned(5 downto 0) := "010010";
   constant FN_MULTU : unsigned(5 downto 0) := "011001";
@@ -36,14 +38,16 @@ package cpu_pkg is
   constant FN_NCR   : unsigned(5 downto 0) := "011100";    -- under OPC_SPECIAL2
 
   type alu_op_t is (A_ADD, A_SUB, A_AND, A_OR, A_SLT);
-  type wb_sel_t is (WB_ALU, WB_MEM, WB_HI, WB_LO, WB_NCR);
+  type wb_sel_t is (WB_ALU, WB_MEM, WB_HI, WB_LO, WB_NCR, WB_LINK);
 
   type cpu_ctrl_t is record
     pc_en       : std_logic;    -- '0' stalls the PC (multu/divu/ncr not done yet)
     take_branch : std_logic;    -- next PC = branch target
     jump        : std_logic;    -- next PC = jump target
+    jump_reg    : std_logic;    -- next PC = rs (jr)
     reg_we      : std_logic;
     reg_dst_rd  : std_logic;    -- '1': write rd, '0': write rt
+    link        : std_logic;    -- write $31 (jal), overriding reg_dst_rd
     alu_src_imm : std_logic;    -- '1': ALU b = sign-extended immediate, '0': rt
     alu_op      : alu_op_t;
     mem_we      : std_logic;
@@ -54,8 +58,10 @@ package cpu_pkg is
     md_to_ncr   : std_logic;    -- '1': the ncr engine drives the muldiv unit
   end record;
 
-  constant CPU_CTRL_NOP : cpu_ctrl_t :=
-    ('1', '0', '0', '0', '0', '0', A_ADD, '0', WB_ALU, '0', OP_MULTU, '0', '0');
+  constant CPU_CTRL_NOP : cpu_ctrl_t := (
+    pc_en => '1', take_branch => '0', jump => '0', jump_reg => '0', reg_we => '0',
+    reg_dst_rd => '0', link => '0', alu_src_imm => '0', alu_op => A_ADD, mem_we => '0',
+    wb_sel => WB_ALU, md_start => '0', md_op => OP_MULTU, ncr_start => '0', md_to_ncr => '0');
 
   type cpu_status_t is record
     instr    : word_t;

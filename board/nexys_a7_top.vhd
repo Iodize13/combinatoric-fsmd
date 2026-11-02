@@ -35,12 +35,10 @@ architecture rtl of nexys_a7_top is
   signal rst        : std_logic;
   signal press      : std_logic;
   signal toggle     : std_logic;
-  signal debug      : std_logic := '0';
-  signal sw_meta    : std_logic_vector(2*NW-1 downto 0) := (others => '0');
-  signal sw_now     : std_logic_vector(2*NW-1 downto 0) := (others => '0');
-  signal sw_age     : natural range 0 to DEBOUNCE := 0;
-  signal sent       : std_logic := '0';    -- n_l, r_l hold the last computed switches
-  signal auto       : std_logic;
+  signal debug      : std_logic;
+  signal sw_now     : std_logic_vector(2*NW-1 downto 0);
+  signal request    : std_logic;
+  signal take       : std_logic;
   signal n_l, r_l   : unsigned(NW-1 downto 0) := (others => '0');
   signal start      : std_logic := '0';
   signal result     : unsigned(31 downto 0);
@@ -80,23 +78,14 @@ begin
     generic map (DEBOUNCE => DEBOUNCE)
     port map (clk => clk, rst => rst, btn => BTNU, pulse => toggle);
 
-  -- Synchronized switches and how long they have been unchanged (switches bounce too).
-  process (clk)
-  begin
-    if rising_edge(clk) then
-      sw_meta <= SW(2*NW-1 downto 0);
-      sw_now  <= sw_meta;
-      if sw_now /= sw_meta then
-        sw_age <= 0;
-      elsif sw_age /= DEBOUNCE then
-        sw_age <= sw_age + 1;
-      end if;
-    end if;
-  end process;
+  req : entity work.run_request
+    generic map (W => 2*NW, SETTLE => DEBOUNCE)
+    port map (clk => clk, rst => rst, press => press, toggle => toggle,
+              sw => SW(2*NW-1 downto 0), take => take, sw_now => sw_now, debug => debug,
+              request => request);
 
-  -- debug mode: settled switches that differ from the last computed ones start a run
-  auto <= '1' when debug = '1' and sw_age = DEBOUNCE and
-                   (sent = '0' or sw_now /= std_logic_vector(r_l & n_l)) else '0';
+  take <= '1' when request = '1' and ncr_busy = '0' and rep_busy = '0' and start = '0'
+          else '0';
 
   -- latch n, r and start only when both the core and the printer are idle
   process (clk)
@@ -105,17 +94,10 @@ begin
       start <= '0';
       if rst = '1' then
         ovf_led <= '0';
-        debug   <= '0';
-        sent    <= '0';
       else
-        if toggle = '1' then
-          debug <= not debug;
-        end if;
-        if (press = '1' or auto = '1') and ncr_busy = '0' and rep_busy = '0' and
-           start = '0' then
+        if take = '1' then
           n_l   <= unsigned(sw_now(NW-1 downto 0));
           r_l   <= unsigned(sw_now(2*NW-1 downto NW));
-          sent  <= '1';
           start <= '1';
         end if;
         if ncr_done = '1' then

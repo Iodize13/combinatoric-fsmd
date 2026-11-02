@@ -9,6 +9,7 @@ use work.muldiv_pkg.all;
 use work.cpu_pkg.all;
 
 entity cpu_dp is
+  generic (ROM : mem_t);
   port (
     clk       : in  std_logic;
     rst       : in  std_logic;
@@ -17,20 +18,22 @@ entity cpu_dp is
     pc        : out word_t;
     mem_we    : out std_logic;
     mem_addr  : out word_t;
-    mem_wdata : out word_t
+    mem_wdata : out word_t;
+    io_rdata  : in  word_t
   );
 end entity;
 
 architecture rtl of cpu_dp is
   signal pc_q, pc_plus4, pc_next   : word_t;
   signal br_offset, br_target      : word_t;
-  signal pc_br, j_target           : word_t;
+  signal pc_br, pc_j, j_target     : word_t;
   signal instr, imm_ext            : word_t;
-  signal rs, rt, rd, wa            : unsigned(4 downto 0);
+  signal rs, rt, rd, wa_rd, wa    : unsigned(4 downto 0);
   signal rs_val, rt_val, wd        : word_t;
   signal alu_b, alu_y              : word_t;
   signal alu_zero                  : std_logic;
-  signal mem_rd                    : word_t;
+  signal ram_rd, mem_rd            : word_t;
+  signal ram_we                    : std_logic;
   signal md_start                  : std_logic;
   signal md_op                     : muldiv_op_t;
   signal md_a, md_b, md_hi, md_lo  : word_t;
@@ -49,7 +52,8 @@ begin
     generic map (N => 32)
     port map (a => pc_q, b => to_unsigned(4, 32), sub => '0', y => pc_plus4);
 
-  rom : entity work.imem
+  imem_i : entity work.imem
+    generic map (ROM => ROM)
     port map (addr => pc_q, instr => instr);
 
   rs        <= instr(25 downto 21);
@@ -69,12 +73,20 @@ begin
 
   j_mux : entity work.mux2
     generic map (W => 32)
-    port map (sel => ctrl.jump, a0 => pc_br, a1 => j_target, y => pc_next);
+    port map (sel => ctrl.jump, a0 => pc_br, a1 => j_target, y => pc_j);
+
+  jr_mux : entity work.mux2
+    generic map (W => 32)
+    port map (sel => ctrl.jump_reg, a0 => pc_j, a1 => rs_val, y => pc_next);
 
   -- register file and ALU
   dst_mux : entity work.mux2
     generic map (W => 5)
-    port map (sel => ctrl.reg_dst_rd, a0 => rt, a1 => rd, y => wa);
+    port map (sel => ctrl.reg_dst_rd, a0 => rt, a1 => rd, y => wa_rd);
+
+  link_mux : entity work.mux2
+    generic map (W => 5)
+    port map (sel => ctrl.link, a0 => wa_rd, a1 => to_unsigned(31, 5), y => wa);
 
   regs : entity work.regfile
     port map (clk => clk, we => ctrl.reg_we, ra1 => rs, ra2 => rt, wa => wa, wd => wd,
@@ -87,8 +99,12 @@ begin
   alu_i : entity work.cpu_alu
     port map (op => ctrl.alu_op, a => rs_val, b => alu_b, y => alu_y, zero => alu_zero);
 
+  map_i : entity work.mem_map
+    port map (we => ctrl.mem_we, addr => alu_y, ram_rd => ram_rd, io_rd => io_rdata,
+              ram_we => ram_we, rd => mem_rd);
+
   ram : entity work.dmem
-    port map (clk => clk, we => ctrl.mem_we, addr => alu_y, wd => rt_val, rd => mem_rd);
+    port map (clk => clk, we => ram_we, addr => alu_y, wd => rt_val, rd => ram_rd);
 
   -- shared multiply/divide unit and the ncr engine that borrows it
   nx : entity work.ncr_engine
@@ -148,7 +164,7 @@ begin
 
   wb : entity work.wb_mux
     port map (sel => ctrl.wb_sel, alu => alu_y, mem => mem_rd, hi => md_hi, lo => md_lo,
-              ncr => ncr_result, y => wd);
+              ncr => ncr_result, pc4 => pc_plus4, y => wd);
 
   status.instr    <= instr;
   status.alu_zero <= alu_zero;

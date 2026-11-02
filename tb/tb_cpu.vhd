@@ -35,8 +35,12 @@ architecture sim of tb_cpu is
     (52, x"FFFFFFFF"),    -- C(67, 33) saturates
     (56, x"00000000"),    -- C(33, 67)
     (60, x"8B18014C"),    -- C(34, 17)
-    (64, x"00000400"));   -- sum of C(10, k)
-  constant HALT_PC : word_t := to_unsigned(56 * 4, 32);
+    (64, x"00000400"),    -- sum of C(10, k)
+    (72, x"0000002A"),    -- jal / jr round trip
+    (1024, x"00000400"),  -- store to I/O is still on the bus
+    (76, x"0000000A"),    -- ... but RAM word 0 kept C(5, 2)
+    (80, x"CAFE0404"));   -- load from I/O returns io_rdata
+  constant HALT_PC : word_t := to_unsigned(64 * 4, 32);
 
   signal clk       : std_logic := '0';
   signal rst       : std_logic := '1';
@@ -44,12 +48,15 @@ architecture sim of tb_cpu is
   signal mem_we    : std_logic;
   signal mem_addr  : word_t;
   signal mem_wdata : word_t;
+  signal io_rdata  : word_t;
 begin
   clk <= not clk after 5 ns;
 
   dut : entity work.cpu
     port map (clk => clk, rst => rst, pc => pc, mem_we => mem_we, mem_addr => mem_addr,
-              mem_wdata => mem_wdata);
+              mem_wdata => mem_wdata, io_rdata => io_rdata);
+
+  io_rdata <= mem_addr xor x"CAFE0000";
 
   process
     variable seen   : natural := 0;

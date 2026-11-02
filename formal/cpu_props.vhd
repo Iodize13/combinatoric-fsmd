@@ -124,7 +124,15 @@ begin
   assert_mem_we_only_sw : assert always (ctrl.mem_we = '1' -> opc = OPC_SW);
   assert_no_reg_we_sw_beq_j : assert always
     (ctrl.reg_we = '1' -> (opc /= OPC_SW and opc /= OPC_BEQ and opc /= OPC_J));
-  assert_one_pc_source : assert always not (ctrl.jump = '1' and ctrl.take_branch = '1');
+  assert_one_pc_source : assert always
+    not ((ctrl.jump = '1' and ctrl.take_branch = '1') or
+         (ctrl.jump_reg = '1' and (ctrl.jump = '1' or ctrl.take_branch = '1')));
+  assert_jr_only_jr : assert always
+    (ctrl.jump_reg = '1' -> (opc = OPC_RTYPE and fn = FN_JR));
+  assert_link_only_jal : assert always
+    (ctrl.link = '1' -> (opc = OPC_JAL and ctrl.reg_we = '1' and ctrl.wb_sel = WB_LINK));
+  assert_jr_no_write : assert always
+    ((opc = OPC_RTYPE and fn = FN_JR) -> ctrl.reg_we = '0');
   assert_branch_only_beq : assert always
     (ctrl.take_branch = '1' -> (opc = OPC_BEQ and alu_zero = '1'));
   assert_md_to_ncr_only_ncr : assert always (ctrl.md_to_ncr = '1' -> is_ncr);
@@ -162,6 +170,8 @@ begin
                                ctrl.pc_en = '1' and stall_len = MAX_LAT + 1};
   cover_md_during_ncr : cover {rst = '0' and ncr_busy = '1' and md_done = '1' and is_ncr};
   cover_branch      : cover {rst = '0' and ctrl.take_branch = '1'};
+  cover_jal         : cover {rst = '0' and ctrl.link = '1' and ctrl.pc_en = '1'};
+  cover_jr          : cover {rst = '0' and ctrl.jump_reg = '1'};
   cover_back_to_back : cover {rst = '0' and is_ncr and ctrl.pc_en = '1';
                               rst = '0' and ctrl.ncr_start = '1'};
 end architecture;
