@@ -23,7 +23,7 @@ entity nexys_a7_cpu_top is
     CLKS_PER_BIT : positive := 109;       -- 12.5 MHz / 115200 = 108.5
     DEBOUNCE     : positive := 125000;    -- 10 ms at 12.5 MHz
     LOAD_TIMEOUT : positive := 1000000;   -- 80 ms at 12.5 MHz without a byte ends a frame
-    IMEM_STYLE   : imem_style_t := IMEM_LUTRAM
+    IMEM_STYLE   : imem_style_t := IMEM_REGISTERS
   );
   port (
     CLK100MHZ    : in  std_logic;

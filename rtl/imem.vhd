@@ -11,7 +11,7 @@ use work.cpu_pkg.all;
 entity imem is
   generic (
     ROM   : mem_t;
-    STYLE : imem_style_t := IMEM_LUTRAM
+    STYLE : imem_style_t := IMEM_REGISTERS
   );
   port (
     clk   : in  std_logic;

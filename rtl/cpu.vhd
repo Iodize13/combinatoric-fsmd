@@ -15,7 +15,7 @@ use work.program_pkg.all;
 entity cpu is
   generic (
     ROM        : mem_t        := TEST_PROGRAM;
-    IMEM_STYLE : imem_style_t := IMEM_LUTRAM
+    IMEM_STYLE : imem_style_t := IMEM_REGISTERS
   );
   port (
     clk        : in  std_logic;
