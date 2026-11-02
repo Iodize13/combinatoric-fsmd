@@ -2,14 +2,14 @@
 -- Every division is exact, so no fractions and no floating point.
 -- One shared muldiv unit: MULTU leaves the 2W-bit product in HI:LO, then
 -- DIVHL divides that HI:LO by i in place, with no copy between them.
--- Structural top: ncr_ctrl (control unit) drives ncr_dp (datapath, with the muldiv unit).
+-- Structural top: ncr_engine (control unit + datapath) with its own muldiv unit.
 -- Pulse start while busy = '0'; n and r are latched on that cycle.
 -- result is valid while done = '1'. If C(n, r) does not fit in W bits, result is all ones
 -- and ovf = '1'; the loop stops at the first quotient that does not fit.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
-use work.ncr_pkg.all;
+use work.muldiv_pkg.all;
 
 entity ncr_core is
   generic (W : positive := 32);
@@ -27,30 +27,46 @@ entity ncr_core is
 end entity;
 
 architecture rtl of ncr_core is
-  signal ctrl   : ncr_ctrl_t;
-  signal status : ncr_status_t;
+  signal md_start          : std_logic;
+  signal md_op             : muldiv_op_t;
+  signal md_a, md_b, md_lo : unsigned(W-1 downto 0);
+  signal md_done, md_ovf   : std_logic;
 begin
-  u_ctrl : entity work.ncr_ctrl
-    port map (
-      clk    => clk,
-      rst    => rst,
-      start  => start,
-      status => status,
-      ctrl   => ctrl,
-      busy   => busy,
-      done   => done
-    );
-
-  u_dp : entity work.ncr_dp
+  u_engine : entity work.ncr_engine
     generic map (W => W)
     port map (
-      clk    => clk,
-      rst    => rst,
-      ctrl   => ctrl,
-      n      => n,
-      r      => r,
-      status => status,
-      result => result,
-      ovf    => ovf
+      clk      => clk,
+      rst      => rst,
+      start    => start,
+      n        => n,
+      r        => r,
+      result   => result,
+      busy     => busy,
+      done     => done,
+      ovf      => ovf,
+      md_start => md_start,
+      md_op    => md_op,
+      md_a     => md_a,
+      md_b     => md_b,
+      md_lo    => md_lo,
+      md_done  => md_done,
+      md_ovf   => md_ovf
+    );
+
+  md : entity work.muldiv
+    generic map (W => W)
+    port map (
+      clk   => clk,
+      rst   => rst,
+      start => md_start,
+      op    => md_op,
+      a     => md_a,
+      b     => md_b,
+      hi    => open,
+      lo    => md_lo,
+      busy  => open,
+      done  => md_done,
+      dz    => open,
+      ovf   => md_ovf
     );
 end architecture;

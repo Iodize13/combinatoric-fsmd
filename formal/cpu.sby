@@ -1,0 +1,29 @@
+# prove: unbounded PDR proof of the CPU control unit against abstract muldiv / ncr units
+#        (MAX_LAT = 3), plus the register file.
+# cover: the stall paths and an ncr retire are reachable.
+[tasks]
+prove
+cover
+
+[options]
+prove: mode prove
+cover: mode cover
+cover: depth 16
+
+[engines]
+prove: abc pdr
+cover: smtbmc yices
+
+[script]
+plugin -i ghdl
+ghdl --std=08 muldiv_pkg.vhd sr_flag.vhd cpu_pkg.vhd regfile.vhd cpu_decode.vhd cpu_ctrl.vhd cpu_props.vhd -e cpu_props
+prep -top cpu_props
+
+[files]
+../rtl/muldiv_pkg.vhd
+../rtl/sr_flag.vhd
+../rtl/cpu_pkg.vhd
+../rtl/regfile.vhd
+../rtl/cpu_decode.vhd
+../rtl/cpu_ctrl.vhd
+cpu_props.vhd
