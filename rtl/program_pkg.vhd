@@ -1,0 +1,69 @@
+-- Contents of the instruction ROM (imem). Hand-assembled from tb/cpu_test.s; the
+-- assembly is next to each word. tb_cpu checks the words this program stores.
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use work.cpu_pkg.all;
+
+package program_pkg is
+  constant PROGRAM : mem_t := (
+    0 => x"20080005",  -- addi $t0, $zero, 5
+    1 => x"20090002",  -- addi $t1, $zero, 2
+    2 => x"7109501C",  -- ncr  $t2, $t0, $t1
+    3 => x"AC0A0000",  -- sw   $t2, 0($zero)
+    4 => x"01485820",  -- add  $t3, $t2, $t0
+    5 => x"01696022",  -- sub  $t4, $t3, $t1
+    6 => x"016C6824",  -- and  $t5, $t3, $t4
+    7 => x"01697025",  -- or   $t6, $t3, $t1
+    8 => x"0128782A",  -- slt  $t7, $t1, $t0
+    9 => x"0109802A",  -- slt  $s0, $t0, $t1
+   10 => x"AC0B0004",  -- sw   $t3, 4($zero)
+   11 => x"AC0C0008",  -- sw   $t4, 8($zero)
+   12 => x"AC0D000C",  -- sw   $t5, 12($zero)
+   13 => x"AC0E0010",  -- sw   $t6, 16($zero)
+   14 => x"AC0F0014",  -- sw   $t7, 20($zero)
+   15 => x"AC100018",  -- sw   $s0, 24($zero)
+   16 => x"8C110000",  -- lw   $s1, 0($zero)
+   17 => x"2231FFFD",  -- addi $s1, $s1, -3
+   18 => x"AC11001C",  -- sw   $s1, 28($zero)
+   19 => x"20000005",  -- addi $zero, $zero, 5
+   20 => x"AC000020",  -- sw   $zero, 32($zero)
+   21 => x"2012FFFF",  -- addi $s2, $zero, -1
+   22 => x"02520019",  -- multu $s2, $s2
+   23 => x"00009810",  -- mfhi $s3
+   24 => x"0000A012",  -- mflo $s4
+   25 => x"AC130024",  -- sw   $s3, 36($zero)
+   26 => x"AC140028",  -- sw   $s4, 40($zero)
+   27 => x"0249802A",  -- slt  $s0, $s2, $t1
+   28 => x"AC100044",  -- sw   $s0, 68($zero)
+   29 => x"20150064",  -- addi $s5, $zero, 100
+   30 => x"20160007",  -- addi $s6, $zero, 7
+   31 => x"02B6001B",  -- divu $s5, $s6
+   32 => x"00009812",  -- mflo $s3
+   33 => x"0000A010",  -- mfhi $s4
+   34 => x"AC13002C",  -- sw   $s3, 44($zero)
+   35 => x"AC140030",  -- sw   $s4, 48($zero)
+   36 => x"20080043",  -- addi $t0, $zero, 67
+   37 => x"20090021",  -- addi $t1, $zero, 33
+   38 => x"7109501C",  -- ncr  $t2, $t0, $t1
+   39 => x"AC0A0034",  -- sw   $t2, 52($zero)
+   40 => x"7128501C",  -- ncr  $t2, $t1, $t0
+   41 => x"AC0A0038",  -- sw   $t2, 56($zero)
+   42 => x"20080022",  -- addi $t0, $zero, 34
+   43 => x"20090011",  -- addi $t1, $zero, 17
+   44 => x"7109501C",  -- ncr  $t2, $t0, $t1
+   45 => x"AC0A003C",  -- sw   $t2, 60($zero)
+   46 => x"2008000A",  -- addi $t0, $zero, 10
+   47 => x"20090000",  -- addi $t1, $zero, 0
+   48 => x"200A0000",  -- addi $t2, $zero, 0
+   49 => x"200B000B",  -- addi $t3, $zero, 11
+   50 => x"112B0004",  -- beq  $t1, $t3, done
+   51 => x"7109601C",  -- ncr  $t4, $t0, $t1
+   52 => x"014C5020",  -- add  $t2, $t2, $t4
+   53 => x"21290001",  -- addi $t1, $t1, 1
+   54 => x"08000032",  -- j    loop
+   55 => x"AC0A0040",  -- sw   $t2, 64($zero)
+   56 => x"08000038",  -- j    halt
+    others => (others => '0')
+  );
+end package;

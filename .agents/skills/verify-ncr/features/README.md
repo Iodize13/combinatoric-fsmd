@@ -26,4 +26,5 @@ This directory is the maintained verification source for the hardware's user-vis
 | muldiv | [muldiv.md](muldiv.md) | MULTU / DIVU / DIVHL on the shared unit |
 | ncr | [ncr.md](ncr.md) | C(n, r) end to end through ncr_core |
 | control-model | [control-model.md](control-model.md) | TLA+ model of the FSM: exactness, no quotient overflow, termination |
+| cpu | [cpu.md](cpu.md) | a program with the ncr instruction runs on the single-cycle CPU |
 | synth | [synth.md](synth.md) | the design synthesizes and its resource count |
