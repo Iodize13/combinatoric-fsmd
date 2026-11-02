@@ -22,7 +22,8 @@ entity nexys_a7_cpu_top is
     CLK_DIV_LOG2 : positive := 3;
     CLKS_PER_BIT : positive := 109;       -- 12.5 MHz / 115200 = 108.5
     DEBOUNCE     : positive := 125000;    -- 10 ms at 12.5 MHz
-    LOAD_TIMEOUT : positive := 1000000    -- 80 ms at 12.5 MHz without a byte ends a frame
+    LOAD_TIMEOUT : positive := 1000000;   -- 80 ms at 12.5 MHz without a byte ends a frame
+    IMEM_STYLE   : imem_style_t := IMEM_LUTRAM
   );
   port (
     CLK100MHZ    : in  std_logic;
@@ -116,7 +117,7 @@ begin
   cpu_rst <= rst or hold;
 
   core : entity work.cpu
-    generic map (ROM => CALC_PROGRAM)
+    generic map (ROM => CALC_PROGRAM, IMEM_STYLE => IMEM_STYLE)
     port map (clk => clk, rst => cpu_rst, pc => open, mem_we => mem_we, mem_addr => mem_addr,
               mem_wdata => mem_wdata, io_rdata => io_rdata, imem_we => imem_we,
               imem_waddr => imem_wa, imem_wdata => imem_wd);

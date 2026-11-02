@@ -13,7 +13,10 @@ use work.cpu_pkg.all;
 use work.program_pkg.all;
 
 entity cpu is
-  generic (ROM : mem_t := TEST_PROGRAM);
+  generic (
+    ROM        : mem_t        := TEST_PROGRAM;
+    IMEM_STYLE : imem_style_t := IMEM_LUTRAM
+  );
   port (
     clk        : in  std_logic;
     rst        : in  std_logic;
@@ -36,7 +39,7 @@ begin
     port map (clk => clk, rst => rst, status => status, ctrl => ctrl);
 
   u_dp : entity work.cpu_dp
-    generic map (ROM => ROM)
+    generic map (ROM => ROM, IMEM_STYLE => IMEM_STYLE)
     port map (
       clk        => clk,
       rst        => rst,
