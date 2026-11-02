@@ -34,7 +34,7 @@ export PATH="$OCS/bin:$PATH"
 RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_engine.vhd rtl/ncr_core.vhd rtl/cpu_pkg.vhd rtl/program_pkg.vhd rtl/cpu_alu.vhd rtl/regfile.vhd rtl/imem.vhd rtl/dmem.vhd rtl/mem_map.vhd rtl/wb_mux.vhd rtl/md_mux.vhd rtl/cpu_decode.vhd rtl/cpu_ctrl.vhd rtl/cpu_dp.vhd rtl/cpu.vhd)
 RTL_ABS=("${RTL[@]/#/$ROOT/}")
 # Nexys A7 calculator around ncr_core (pins in board/nexys_a7.xdc).
-BOARD=(board/uart_tx.vhd board/bin2bcd.vhd board/btn_pulse.vhd board/run_request.vhd board/ncr_report.vhd board/nexys_a7_top.vhd board/cpu_io.vhd board/nexys_a7_cpu_top.vhd)
+BOARD=(board/uart_tx.vhd board/bin2bcd.vhd board/btn_pulse.vhd board/run_request.vhd board/ncr_report.vhd board/nexys_a7_top.vhd board/cpu_io.vhd board/uart_rx.vhd board/uart_loader.vhd board/nexys_a7_cpu_top.vhd)
 # ROM programs: source:constant, assembled into rtl/program_pkg.vhd by scripts/asm.py.
 PROGRAMS=(tb/cpu_test.s:TEST_PROGRAM board/calc.s:CALC_PROGRAM)
 BOARD_ABS=("${BOARD[@]/#/$ROOT/}")
@@ -64,7 +64,7 @@ cmd_doctor() {
   else echo "MISS ghdl-yosys-plugin"; ok=1; fi
   if [ -f "$TLA_JAR" ]; then echo "ok   tla2tools.jar  $TLA_JAR"; else echo "MISS tla2tools.jar ($TLA_JAR)"; ok=1; fi
   command -v ghdl >/dev/null && ghdl --version | head -1
-  for f in "${RTL[@]}" "${BOARD[@]}" board/nexys_a7.xdc tb/tb_muldiv.vhd tb/tb_ncr.vhd tb/tb_cpu.vhd tb/tb_board.vhd formal/muldiv.sby formal/ncr.sby formal/cpu.sby spec/NcrFsm.tla; do
+  for f in "${RTL[@]}" "${BOARD[@]}" board/nexys_a7.xdc tb/tb_muldiv.vhd tb/tb_ncr.vhd tb/tb_cpu.vhd tb/tb_board.vhd tb/tb_loader.vhd formal/muldiv.sby formal/ncr.sby formal/cpu.sby spec/NcrFsm.tla; do
     [ -f "$ROOT/$f" ] || { echo "MISS $f"; ok=1; }
   done
   return $ok
@@ -76,11 +76,11 @@ cmd_sim() {
   cd "$WK"
   record sim-analyze ghdl -a --std=08 --workdir="$WK" \
     "${RTL_ABS[@]}" "$ROOT/formal/ref/muldiv_ref.vhd" "$ROOT/formal/ref/ncr_core_ref.vhd" \
-    "${BOARD_ABS[@]}" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd" "$ROOT/tb/tb_cpu.vhd" "$ROOT/tb/tb_board.vhd"
+    "${BOARD_ABS[@]}" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd" "$ROOT/tb/tb_cpu.vhd" "$ROOT/tb/tb_board.vhd" "$ROOT/tb/tb_loader.vhd"
   (cd "$ROOT" && python3 scripts/asm.py --check "${PROGRAMS[@]}") || return 1
   # run name -> testbench entity + generics (tb_board_cpu is tb_board on the CPU top)
   local run tb
-  for run in tb_muldiv tb_ncr tb_equiv tb_cpu tb_board tb_board_cpu; do
+  for run in tb_muldiv tb_ncr tb_equiv tb_cpu tb_board tb_board_cpu tb_loader; do
     tb=$run; local gen=()
     case $run in
       tb_ncr) gen=(-gN_MAX="$nmax") ;;
