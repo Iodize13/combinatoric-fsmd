@@ -49,5 +49,7 @@ set_property -dict { PACKAGE_PIN C12   IOSTANDARD LVCMOS33 } [get_ports CPU_RESE
 set_property -dict { PACKAGE_PIN N17   IOSTANDARD LVCMOS33 } [get_ports BTNC]
 set_property -dict { PACKAGE_PIN M18   IOSTANDARD LVCMOS33 } [get_ports BTNU]
 
-## USB-UART, named from the PC's side: UART_RXD_OUT is the FPGA's transmit line
+## USB-UART, named from the PC's side: UART_RXD_OUT is the FPGA's transmit line,
+## UART_TXD_IN its receive line (the program loader of nexys_a7_cpu_top)
 set_property -dict { PACKAGE_PIN D4    IOSTANDARD LVCMOS33 } [get_ports UART_RXD_OUT]
+set_property -dict { PACKAGE_PIN C4    IOSTANDARD LVCMOS33 } [get_ports UART_TXD_IN]

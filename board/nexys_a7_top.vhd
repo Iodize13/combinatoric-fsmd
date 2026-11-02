@@ -22,7 +22,8 @@ entity nexys_a7_top is
     SW           : in  std_logic_vector(15 downto 0);
     LED          : out std_logic_vector(15 downto 0);
     LED16_G      : out std_logic;
-    UART_RXD_OUT : out std_logic          -- named from the PC's side: FPGA transmit
+    UART_RXD_OUT : out std_logic;         -- named from the PC's side: FPGA transmit
+    UART_TXD_IN  : in  std_logic := '1'   -- unused here; nexys_a7.xdc pins it for the CPU top
   );
 end entity;
 

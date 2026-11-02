@@ -4,8 +4,13 @@
 -- by themselves), results print in decimal on the USB-UART (115200 8N1). Here the CPU
 -- does the work in software through the I/O registers of cpu_io. LED13..0 mirror the
 -- switches, LED14 = a run is waiting for the CPU, LED15 = the last result overflowed.
+-- A new program can be sent over the same USB-UART (uart_loader, scripts/load.py): the CPU
+-- is held in reset while the frame arrives and restarts at pc 0 after the 'K' reply.
+-- CPU_RESETN restarts the program in instruction memory; reloading the bitstream restores
+-- calc.s.
 -- The 100 MHz clock is divided by 2**CLK_DIV_LOG2 (12.5 MHz by default): the single-cycle
--- path (ROM, register file, ALU, RAM, write-back) is long and openXC7 timing is approximate.
+-- path (instruction RAM, register file, ALU, data RAM, write-back) is long and openXC7
+-- timing is approximate.
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -16,7 +21,9 @@ entity nexys_a7_cpu_top is
   generic (
     CLK_DIV_LOG2 : positive := 3;
     CLKS_PER_BIT : positive := 109;       -- 12.5 MHz / 115200 = 108.5
-    DEBOUNCE     : positive := 125000     -- 10 ms at 12.5 MHz
+    DEBOUNCE     : positive := 125000;    -- 10 ms at 12.5 MHz
+    LOAD_TIMEOUT : positive := 1000000;   -- 80 ms at 12.5 MHz without a byte ends a frame
+    IMEM_STYLE   : imem_style_t := IMEM_REGISTERS
   );
   port (
     CLK100MHZ    : in  std_logic;
@@ -26,7 +33,8 @@ entity nexys_a7_cpu_top is
     SW           : in  std_logic_vector(15 downto 0);
     LED          : out std_logic_vector(15 downto 0);
     LED16_G      : out std_logic;
-    UART_RXD_OUT : out std_logic          -- named from the PC's side: FPGA transmit
+    UART_RXD_OUT : out std_logic;         -- named from the PC's side: FPGA transmit
+    UART_TXD_IN  : in  std_logic := '1'   -- named from the PC's side: FPGA receive
   );
 end entity;
 
@@ -37,6 +45,8 @@ architecture rtl of nexys_a7_cpu_top is
   signal clk       : std_logic;
   signal rst_sync  : std_logic_vector(1 downto 0) := "11";
   signal rst       : std_logic;
+  signal hold      : std_logic;
+  signal cpu_rst   : std_logic;
   signal press     : std_logic;
   signal toggle    : std_logic;
   signal debug     : std_logic;
@@ -47,6 +57,15 @@ architecture rtl of nexys_a7_cpu_top is
   signal mem_addr  : word_t;
   signal mem_wdata : word_t;
   signal io_rdata  : word_t;
+  signal imem_we   : std_logic;
+  signal imem_wa   : unsigned(7 downto 0);
+  signal imem_wd   : word_t;
+  signal rx_valid  : std_logic;
+  signal rx_data   : std_logic_vector(7 downto 0);
+  signal io_start  : std_logic;
+  signal io_data   : std_logic_vector(7 downto 0);
+  signal ld_start  : std_logic;
+  signal ld_data   : std_logic_vector(7 downto 0);
   signal tx_start  : std_logic;
   signal tx_data   : std_logic_vector(7 downto 0);
   signal tx_busy   : std_logic;
@@ -85,10 +104,23 @@ begin
               sw => SW(2*NW-1 downto 0), take => take, sw_now => sw_now, debug => debug,
               request => request);
 
+  rx : entity work.uart_rx
+    generic map (CLKS_PER_BIT => CLKS_PER_BIT)
+    port map (clk => clk, rst => rst, rx => UART_TXD_IN, valid => rx_valid, data => rx_data);
+
+  loader : entity work.uart_loader
+    generic map (TIMEOUT => LOAD_TIMEOUT)
+    port map (clk => clk, rx_valid => rx_valid, rx_data => rx_data, tx_busy => tx_busy,
+              hold => hold, imem_we => imem_we, imem_waddr => imem_wa, imem_wdata => imem_wd,
+              tx_start => ld_start, tx_data => ld_data);
+
+  cpu_rst <= rst or hold;
+
   core : entity work.cpu
-    generic map (ROM => CALC_PROGRAM)
-    port map (clk => clk, rst => rst, pc => open, mem_we => mem_we, mem_addr => mem_addr,
-              mem_wdata => mem_wdata, io_rdata => io_rdata);
+    generic map (ROM => CALC_PROGRAM, IMEM_STYLE => IMEM_STYLE)
+    port map (clk => clk, rst => cpu_rst, pc => open, mem_we => mem_we, mem_addr => mem_addr,
+              mem_wdata => mem_wdata, io_rdata => io_rdata, imem_we => imem_we,
+              imem_waddr => imem_wa, imem_wdata => imem_wd);
 
   io : entity work.cpu_io
     generic map (NW => NW)
@@ -104,10 +136,14 @@ begin
       request   => request,
       tx_busy   => tx_busy,
       take      => take,
-      tx_start  => tx_start,
-      tx_data   => tx_data,
+      tx_start  => io_start,
+      tx_data   => io_data,
       led_ovf   => led_ovf
     );
+
+  -- the loader owns the transmitter while it holds the CPU
+  tx_start <= ld_start when hold = '1' else io_start;
+  tx_data  <= ld_data  when hold = '1' else io_data;
 
   tx : entity work.uart_tx
     generic map (CLKS_PER_BIT => CLKS_PER_BIT)

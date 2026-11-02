@@ -52,6 +52,21 @@ Before the board, `scripts/verify.sh sim` runs `tb_board` against both tops (`tb
 
 ## Changing the CPU program
 
-Edit `calc.s`, then regenerate the ROM: `scripts/asm.py tb/cpu_test.s:TEST_PROGRAM
-board/calc.s:CALC_PROGRAM`. `verify.sh sim` refuses a stale `rtl/program_pkg.vhd`. I/O
-registers are listed in `cpu_io.vhd`.
+Programs are assembled by [customasm](https://github.com/hlorenzi/customasm)
+(`cargo install customasm`) with the rules in `asm/cpu.asm`; it rejects any instruction the
+CPU does not implement. Comments start with `;`. I/O registers are listed in `cpu_io.vhd`.
+
+Without rebuilding the bitstream, send a program to the running `nexys_a7_cpu_top` over the
+same USB-UART (close `screen` first, it holds the tty):
+
+```
+scripts/load.py board/calc.s --tty /dev/ttyUSB1      # a .s is assembled first; a .bin is sent as is
+```
+
+The CPU is held while the frame arrives and restarts at pc 0 after the board answers `K`.
+`E` (bad checksum, or a stalled transfer) keeps the CPU held until a good load.
+`CPU_RESETN` restarts the loaded program; reloading the bitstream brings back `calc.s`.
+Programs are at most 256 words.
+
+To change the program built into the bitstream, edit `calc.s` and run `scripts/verify.sh asm`
+to regenerate `rtl/program_pkg.vhd`; `verify.sh sim` refuses a stale one.

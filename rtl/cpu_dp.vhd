@@ -9,17 +9,23 @@ use work.muldiv_pkg.all;
 use work.cpu_pkg.all;
 
 entity cpu_dp is
-  generic (ROM : mem_t);
+  generic (
+    ROM        : mem_t;
+    IMEM_STYLE : imem_style_t
+  );
   port (
-    clk       : in  std_logic;
-    rst       : in  std_logic;
-    ctrl      : in  cpu_ctrl_t;
-    status    : out cpu_status_t;
-    pc        : out word_t;
-    mem_we    : out std_logic;
-    mem_addr  : out word_t;
-    mem_wdata : out word_t;
-    io_rdata  : in  word_t
+    clk        : in  std_logic;
+    rst        : in  std_logic;
+    ctrl       : in  cpu_ctrl_t;
+    status     : out cpu_status_t;
+    pc         : out word_t;
+    mem_we     : out std_logic;
+    mem_addr   : out word_t;
+    mem_wdata  : out word_t;
+    io_rdata   : in  word_t;
+    imem_we    : in  std_logic;
+    imem_waddr : in  unsigned(7 downto 0);
+    imem_wdata : in  word_t
   );
 end entity;
 
@@ -53,8 +59,9 @@ begin
     port map (a => pc_q, b => to_unsigned(4, 32), sub => '0', y => pc_plus4);
 
   imem_i : entity work.imem
-    generic map (ROM => ROM)
-    port map (addr => pc_q, instr => instr);
+    generic map (ROM => ROM, STYLE => IMEM_STYLE)
+    port map (clk => clk, we => imem_we, waddr => imem_waddr, wdata => imem_wdata,
+              addr => pc_q, instr => instr);
 
   rs        <= instr(25 downto 21);
   rt        <= instr(20 downto 16);

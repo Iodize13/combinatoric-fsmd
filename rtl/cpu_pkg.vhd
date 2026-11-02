@@ -15,6 +15,9 @@ package cpu_pkg is
 
   constant MEM_WORDS : positive := 256;    -- per memory; addresses wrap at 4*MEM_WORDS bytes
   type mem_t is array (0 to MEM_WORDS-1) of word_t;
+  -- how imem is built: the FPGA's LUT RAM, or one register per word with a write decoder
+  -- and a read mux (8192 flip-flops)
+  type imem_style_t is (IMEM_LUTRAM, IMEM_REGISTERS);
 
   constant OPC_RTYPE    : unsigned(5 downto 0) := "000000";
   constant OPC_J        : unsigned(5 downto 0) := "000010";
