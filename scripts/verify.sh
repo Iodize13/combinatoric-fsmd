@@ -6,6 +6,9 @@
 #   scripts/verify.sh formal [muldiv|ncr|equiv|cpu] [task]
 #   scripts/verify.sh tla
 #   scripts/verify.sh synth
+#   scripts/verify.sh board-synth    # Nexys A7 top mapped to Artix-7 cells (synth_xilinx)
+#   scripts/verify.sh bitstream      # Nexys A7 .bit via openXC7; run inside its nix shell
+#   scripts/verify.sh program [BIT]  # load the .bit over USB-JTAG (openFPGALoader)
 #   scripts/verify.sh schematic        # RTL schematics as SVG (needs netlistsvg)
 #   scripts/verify.sh all
 #   scripts/verify.sh clean [RUN_ID]
@@ -16,6 +19,9 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "$0")/.." && pwd)
 OCS=${OSS_CAD_SUITE:-$HOME/.local/opt/oss-cad-suite}
 TLA_JAR=${TLA2TOOLS:-$HOME/.local/opt/tla/tla2tools.jar}
+# Nexys A7 part (xc7a50tcsg324-1 for the -50T board) and where generated chipdbs are kept.
+NEXYS_PART=${NEXYS_PART:-xc7a100tcsg324-1}
+CHIPDB_DIR=${CHIPDB_DIR:-$HOME/.local/opt/openxc7/chipdb}
 NETLISTSVG=${NETLISTSVG:-$HOME/.local/opt/netlistsvg/node_modules/.bin/netlistsvg}
 RUN_ID=${RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}
 EV="$ROOT/evidence/$RUN_ID"
@@ -26,6 +32,9 @@ export PATH="$OCS/bin:$PATH"
 # RTL sources in compile order (packages first). The .sby files keep their own copies.
 RTL=(rtl/muldiv_pkg.vhd rtl/alu.vhd rtl/reg_en.vhd rtl/sr_flag.vhd rtl/down_counter.vhd rtl/prodrem_reg.vhd rtl/muldiv_status.vhd rtl/muldiv_dp.vhd rtl/muldiv_next.vhd rtl/muldiv_state_reg.vhd rtl/muldiv_ctrl.vhd rtl/muldiv.vhd rtl/ncr_pkg.vhd rtl/up_counter.vhd rtl/cmp_gt.vhd rtl/mux2.vhd rtl/res_reg.vhd rtl/ncr_dp.vhd rtl/ncr_next.vhd rtl/ncr_state_reg.vhd rtl/ncr_ctrl.vhd rtl/ncr_engine.vhd rtl/ncr_core.vhd rtl/cpu_pkg.vhd rtl/program_pkg.vhd rtl/cpu_alu.vhd rtl/regfile.vhd rtl/imem.vhd rtl/dmem.vhd rtl/wb_mux.vhd rtl/md_mux.vhd rtl/cpu_decode.vhd rtl/cpu_ctrl.vhd rtl/cpu_dp.vhd rtl/cpu.vhd)
 RTL_ABS=("${RTL[@]/#/$ROOT/}")
+# Nexys A7 calculator around ncr_core (pins in board/nexys_a7.xdc).
+BOARD=(board/uart_tx.vhd board/bin2bcd.vhd board/btn_pulse.vhd board/ncr_report.vhd board/nexys_a7_top.vhd)
+BOARD_ABS=("${BOARD[@]/#/$ROOT/}")
 
 prep_dirs() { mkdir -p "$EV" "$WK"; }
 
@@ -52,7 +61,7 @@ cmd_doctor() {
   else echo "MISS ghdl-yosys-plugin"; ok=1; fi
   if [ -f "$TLA_JAR" ]; then echo "ok   tla2tools.jar  $TLA_JAR"; else echo "MISS tla2tools.jar ($TLA_JAR)"; ok=1; fi
   command -v ghdl >/dev/null && ghdl --version | head -1
-  for f in "${RTL[@]}" tb/tb_muldiv.vhd tb/tb_ncr.vhd tb/tb_cpu.vhd formal/muldiv.sby formal/ncr.sby formal/cpu.sby spec/NcrFsm.tla; do
+  for f in "${RTL[@]}" "${BOARD[@]}" board/nexys_a7.xdc tb/tb_muldiv.vhd tb/tb_ncr.vhd tb/tb_cpu.vhd tb/tb_board.vhd formal/muldiv.sby formal/ncr.sby formal/cpu.sby spec/NcrFsm.tla; do
     [ -f "$ROOT/$f" ] || { echo "MISS $f"; ok=1; }
   done
   return $ok
@@ -64,8 +73,8 @@ cmd_sim() {
   cd "$WK"
   record sim-analyze ghdl -a --std=08 --workdir="$WK" \
     "${RTL_ABS[@]}" "$ROOT/formal/ref/muldiv_ref.vhd" "$ROOT/formal/ref/ncr_core_ref.vhd" \
-    "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd" "$ROOT/tb/tb_cpu.vhd"
-  for tb in tb_muldiv tb_ncr tb_equiv tb_cpu; do
+    "${BOARD_ABS[@]}" "$ROOT/tb/tb_muldiv.vhd" "$ROOT/tb/tb_ncr.vhd" "$ROOT/tb/tb_equiv.vhd" "$ROOT/tb/tb_cpu.vhd" "$ROOT/tb/tb_board.vhd"
+  for tb in tb_muldiv tb_ncr tb_equiv tb_cpu tb_board; do
     record "sim-elab-$tb" ghdl -e --std=08 --workdir="$WK" "$tb" || { rc=1; continue; }
     local gen=(); [ "$tb" = tb_ncr ] && gen=(-gN_MAX="$nmax")
     record "sim-run-$tb" ghdl -r --std=08 --workdir="$WK" "$tb" "${gen[@]}" \
@@ -126,6 +135,54 @@ cmd_synth() {
   return $rc
 }
 
+cmd_board_synth() {
+  prep_dirs
+  cd "$WK"
+  record board-synth yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e nexys_a7_top; synth_xilinx -top nexys_a7_top -flatten; stat"
+}
+
+# openXC7 flow (github.com/openXC7/demo-projects openXC7.mk): synth_xilinx -> nextpnr-xilinx
+# -> fpga-as. nextpnr-xilinx, bbasm and fpga-as come from the openXC7 nix dev shell, which
+# also sets NEXTPNR_XILINX_DIR and PRJXRAY_DB_DIR.
+cmd_bitstream() {
+  local t
+  for t in nextpnr-xilinx fpga-as; do
+    command -v "$t" >/dev/null || {
+      echo "MISS $t: run inside: nix --extra-experimental-features 'nix-command flakes' develop github:openxc7/toolchain-nix"
+      return 1
+    }
+  done
+  : "${NEXTPNR_XILINX_DIR:?not set; run inside the openXC7 nix shell}"
+  : "${PRJXRAY_DB_DIR:?not set; run inside the openXC7 nix shell}"
+  prep_dirs
+  cd "$WK"
+  local dbpart die out="$EV/board"
+  dbpart=$(echo "$NEXYS_PART" | sed -e 's/-[0-9]//g')
+  die=$(echo "$NEXYS_PART" | sed -E 's/^(xc7a[0-9]+t).*/\1/')
+  mkdir -p "$out" "$CHIPDB_DIR"
+  if [ ! -f "$CHIPDB_DIR/$dbpart.bin" ]; then
+    record board-chipdb sh -c "python3 '$NEXTPNR_XILINX_DIR/share/nextpnr/himbaechel/uarch/xilinx/gen/xilinx_gen.py' \
+        --xray '$PRJXRAY_DB_DIR/artix7' --device $die --bba '$WK/$dbpart.bba' &&
+      '$NEXTPNR_XILINX_DIR/bin/bbasm' -l '$WK/$dbpart.bba' '$CHIPDB_DIR/$dbpart.bin' &&
+      rm -f '$WK/$dbpart.bba'" || return 1
+  fi
+  record board-yosys yosys -m ghdl -p "ghdl --std=08 ${RTL_ABS[*]} ${BOARD_ABS[*]} -e nexys_a7_top; synth_xilinx -flatten -abc9 -arch xc7 -top nexys_a7_top; write_json $WK/nexys_a7.json" || return 1
+  record board-pnr nextpnr-xilinx --chipdb "$CHIPDB_DIR/$dbpart.bin" --xdc "$ROOT/board/nexys_a7.xdc" \
+    --json "$WK/nexys_a7.json" --fasm "$WK/nexys_a7.fasm" || return 1
+  record board-bit sh -c "fpga-as --prjxray_db_path='$PRJXRAY_DB_DIR/artix7' --part $NEXYS_PART '$WK/nexys_a7.fasm' > '$out/nexys_a7.bit'" || return 1
+  grep -iE 'Max frequency|Critical path|ERROR' "$EV/board-pnr.log" | tail -5 || true
+  ls -l "$out/nexys_a7.bit"
+}
+
+cmd_program() {
+  local bit=${1:-} board=nexys_a7_100
+  [ -n "$bit" ] || bit=$(ls -t "$ROOT"/evidence/*/board/nexys_a7.bit 2>/dev/null | head -1)
+  [ -f "$bit" ] || { echo "no bitstream; run: scripts/verify.sh bitstream"; return 1; }
+  case "$NEXYS_PART" in xc7a50t*) board=nexys_a7_50 ;; esac
+  echo "loading $bit ($board, SRAM only: lost on power off)"
+  openFPGALoader -b "$board" --bitstream "$bit"
+}
+
 # One SVG per entity, hierarchy kept: structural tops show their sub-units as boxes.
 cmd_schematic() {
   prep_dirs
@@ -148,6 +205,7 @@ cmd_all() {
   cmd_formal || rc=1
   cmd_tla || rc=1
   cmd_synth || rc=1
+  cmd_board_synth || rc=1
   echo "evidence: $EV"
   return $rc
 }
@@ -167,8 +225,11 @@ case "${1:-}" in
   formal) shift; cmd_formal "$@" ;;
   tla)    shift; cmd_tla "$@" ;;
   synth)  shift; cmd_synth "$@" ;;
+  board-synth) shift; cmd_board_synth "$@" ;;
+  bitstream) shift; cmd_bitstream "$@" ;;
+  program) shift; cmd_program "$@" ;;
   schematic) shift; cmd_schematic "$@" ;;
   all)    shift; cmd_all "$@" ;;
   clean)  shift; cmd_clean "$@" ;;
-  *) sed -n '2,12p' "$0"; exit 2 ;;
+  *) sed -n '2,15p' "$0"; exit 2 ;;
 esac
